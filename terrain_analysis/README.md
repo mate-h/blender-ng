@@ -24,7 +24,7 @@ After extensive reverse engineering, we discovered that:
   - ✅ Can be used standalone or imported as module
 
 ### Output
-- **`blender_export_final/`** - Corrected terrain data ready for Blender
+- **`blender_export/`** - Corrected terrain data ready for Blender
   - `heightmap.npy` - 1024×1024 float32 terrain heights (corrected)
   - `layermap.npy` - Material ID mapping 
   - `terrain_metadata.json` - Complete metadata with fix notes

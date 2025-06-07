@@ -11,7 +11,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 
-class BeamNGTerrainParserFinal:
+class BeamNGTerrainParser:
     def __init__(self, ter_file: str, json_file: str):
         self.ter_file = Path(ter_file)
         self.json_file = Path(json_file)
@@ -137,7 +137,7 @@ class BeamNGTerrainParserFinal:
             'usage': material_usage
         }
     
-    def export_for_blender(self, output_dir: str = "blender_export_final") -> Dict:
+    def export_for_blender(self, output_dir: str = "blender_export") -> Dict:
         """Export terrain data in format suitable for Blender import"""
         
         # Parse terrain
@@ -205,7 +205,7 @@ def main():
     json_file = f"{default_path}/small_island.terrain.json"
     
     # Create parser
-    parser = BeamNGTerrainParserFinal(ter_file, json_file)
+    parser = BeamNGTerrainParser(ter_file, json_file)
     
     # Parse and export
     metadata = parser.export_for_blender()

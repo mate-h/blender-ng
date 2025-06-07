@@ -9,7 +9,7 @@ the terrain is properly loaded without wrapping artifacts.
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from ter_parser_final import BeamNGTerrainParserFinal
+from terrain_analysis.ter_parser import BeamNGTerrainParser
 
 def visualize_corrected_terrain():
     """Visualize the final corrected terrain data"""
@@ -19,13 +19,13 @@ def visualize_corrected_terrain():
     json_file = f"{default_path}/small_island.terrain.json"
     
     # Create parser
-    parser = BeamNGTerrainParserFinal(ter_file, json_file)
+    parser = BeamNGTerrainParser(ter_file, json_file)
     
     # Parse terrain
     terrain_data = parser.parse_terrain()
     heightmap = terrain_data['heightmap']
     
-    print(f"🎉 FINAL CORRECTED TERRAIN LOADED!")
+    print(f"Terrain data loaded successfully!")
     print(f"   Shape: {heightmap.shape}")
     print(f"   Min/Max heights: {heightmap.min()} / {heightmap.max()}")
     print(f"   Mean height: {heightmap.mean():.1f}")
