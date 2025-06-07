@@ -17,6 +17,12 @@ Based on exploration of the `small_island` test level, BeamNG levels contain:
 - **Preview Images**: `.jpg` and `.png` for level previews and minimaps
 
 ### Directory Structure:
+
+Test data location:
+```
+/Volumes/Goodboy/crossover/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/BeamNG.drive/content/levels/levels/small_island
+```
+
 ```
 levels/small_island/
 ├── art/
