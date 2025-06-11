@@ -144,3 +144,5 @@ scratch/
 
 # Logs
 logs/
+
+*.blend1
