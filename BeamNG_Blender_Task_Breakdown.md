@@ -2,9 +2,9 @@
 
 ## Project Status Overview
 - **Total Tasks**: 67
-- **Completed**: 9
+- **Completed**: 12
 - **In Progress**: 0
-- **Not Started**: 58
+- **Not Started**: 55
 
 ## Legend
 - 🔴 **High Priority** - Critical path items
@@ -98,20 +98,20 @@
   - **Deliverable**: Texture layer data parser
 
 ### 2.2 Terrain Mesh Generation 🔴
-- [ ] **Task 2.2.1**: Generate Blender mesh from heightmap ⏳
+- [x] **Task 2.2.1**: Generate Blender mesh from heightmap ✅
   - **Effort**: 3 days
   - **Dependencies**: Task 2.1.2
-  - **Deliverable**: Heightmap to mesh converter
+  - **Deliverable**: EXR displacement-based terrain generation
 
-- [ ] **Task 2.2.2**: Apply proper scaling and positioning ⏳
+- [x] **Task 2.2.2**: Apply proper scaling and positioning ✅
   - **Effort**: 1 day
   - **Dependencies**: Task 2.2.1
-  - **Deliverable**: Correctly scaled terrain in Blender
+  - **Deliverable**: Correctly scaled terrain with configurable parameters
 
-- [ ] **Task 2.2.3**: Create basic terrain material nodes ⏳
+- [x] **Task 2.2.3**: Create basic terrain material nodes ✅
   - **Effort**: 2 days
   - **Dependencies**: Task 2.2.2
-  - **Deliverable**: Blender material setup for terrain
+  - **Deliverable**: Complete material with 16-bit EXR displacement
 
 ### 2.3 Terrain Texture Handling 🔴
 - [ ] **Task 2.3.1**: Implement DDS to Blender conversion pipeline ⏳

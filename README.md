@@ -1,216 +1,162 @@
-# BeamNG.drive Level Importer/Exporter for Blender
+# BeamNG.drive Blender Importer/Exporter
 
-A comprehensive Blender addon for importing and exporting BeamNG.drive level data, enabling level designers to work with BeamNG content in Blender's familiar environment.
+A comprehensive Blender addon for importing and exporting BeamNG.drive level data, featuring **16-bit EXR displacement terrain import** for high-quality, non-destructive terrain workflows.
 
-## 🚀 Current Status: Phase 1 Complete
+## 🌟 Features
 
-**Version**: 0.1.0 (Alpha)  
-**Phase**: Foundation & Research Complete  
-**Next**: Terrain Import (Phase 2)
+### ✅ **Current (Phase 2)**
+- **🏞️ EXR Terrain Import** - Import BeamNG `.ter` terrain files as 16-bit EXR displacement textures
+- **⚡ Real-time Preview** - Live viewport displacement preview with subdivision surfaces  
+- **🎛️ Configurable Parameters** - Adjustable terrain scale, displacement strength, and subdivision levels
+- **🔧 Non-destructive Workflow** - Displacement-based approach preserves original heightmap data
+- **📁 Level Detection** - Automatic BeamNG level directory validation
+- **🎨 Material System** - Automated terrain material setup with proper displacement nodes
 
-### ✅ What's Working Now:
-- ✅ Basic addon structure and registration
-- ✅ Import/Export operators with file browser integration
-- ✅ UI panels in 3D Viewport
-- ✅ Menu integration (File > Import/Export)
-- ✅ Development workflow and installation scripts
-- ✅ BeamNG level detection and validation
-
-### 🔄 What's Coming Next:
-- 🔧 Terrain data parsing (.ter files)
-- 🔧 Heightmap to mesh conversion
-- 🔧 DDS texture conversion pipeline
-- 🔧 Basic terrain materials
+### 🔄 **Coming Soon**
+- **Static Objects Import** - Prefab objects and meshes from `.prefab` files
+- **Texture Pipeline** - DDS texture conversion and material assignment
+- **Export Functionality** - Export Blender scenes back to BeamNG format
+- **Advanced Materials** - Multi-layer terrain textures and blending
 
 ## 📦 Installation
 
-### For Users (Simple Installation)
+### Automatic Install (Recommended)
+```bash
+# Clone repository
+git clone https://github.com/yourusername/beamng-blender-addon.git
+cd beamng-blender-addon
 
-1. **Download the addon package:**
-   ```bash
-   git clone https://github.com/your-repo/beamng-blender-addon.git
-   cd beamng-blender-addon
-   python install_addon.py --package
-   ```
+# Run installation script
+chmod +x quick_install.sh
+./quick_install.sh
+```
 
-2. **Install in Blender:**
-   - Open Blender
-   - Go to `Edit > Preferences > Add-ons`
-   - Click `Install...` and select the generated `.zip` file
-   - Search for "BeamNG" and enable the addon
+### Manual Install
+1. Download or clone this repository
+2. Copy `beamng_blender_addon/` to your Blender addons directory:
+   - **macOS**: `~/Library/Application Support/Blender/4.x/scripts/addons/`
+   - **Windows**: `%APPDATA%/Blender Foundation/Blender/4.x/scripts/addons/`
+   - **Linux**: `~/.config/blender/4.x/scripts/addons/`
+3. Open Blender > Edit > Preferences > Add-ons
+4. Search for "BeamNG" and enable the addon
 
-### For Developers (Development Installation)
+## 🚀 Usage
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-repo/beamng-blender-addon.git
-   cd beamng-blender-addon
-   ```
+### EXR Terrain Import Workflow
 
-2. **Install for development (creates symlink for live editing):**
-   ```bash
-   python install_addon.py --dev
-   ```
+1. **Open Import Dialog**
+   - Go to `File > Import > BeamNG Level`
+   - Navigate to your BeamNG level directory (contains `.ter` and `.terrain.json`)
 
-3. **Manual installation (if auto-detection fails):**
-   ```bash
-   # Find your Blender addon directory and specify it
-   python install_addon.py --dev --target "/path/to/blender/addons/"
-   ```
+2. **Configure Terrain Settings** (in BeamNG panel)
+   - **Terrain Scale**: Overall size multiplier (default: 1.0)
+   - **Displacement Strength**: Height variation intensity (try 50-200 for realistic results)
+   - **Subdivision Levels**: Detail level (6+ recommended, 8+ for high detail)
 
-### Installation Options
+3. **Import Terrain**
+   - Enable "Import Terrain" option
+   - Click "Import BeamNG Level"
 
-| Command | Description |
-|---------|-------------|
-| `python install_addon.py` | Standard installation (copies files) |
-| `python install_addon.py --dev` | Development installation (symlink for live editing) |
-| `python install_addon.py --package` | Package addon as .zip for distribution |
-| `python install_addon.py --target <path>` | Specify custom Blender addon directory |
+4. **Optimize Viewport** (for performance)
+   - Switch to "Material Preview" or "Rendered" viewport shading
+   - Lower subdivision levels for initial testing
 
-## 🎯 Usage
+### Expected Results
+- Creates `BeamNG_Terrain` object with subdivision surface modifier
+- Generates `BeamNG_Terrain_Displacement.exr` texture (16-bit precision)
+- Applies green terrain material with displacement nodes
+- Real-time viewport preview of terrain displacement
 
-### Accessing the Addon
+## 📋 Requirements
 
-1. **In the 3D Viewport:** Press `N` to open the sidebar, look for the "BeamNG" tab
-2. **In the File Menu:** `File > Import > BeamNG Level` or `File > Export > BeamNG Level`
-
-### Import BeamNG Levels
-
-1. Click "Import Level" in the BeamNG panel or use `File > Import > BeamNG Level`
-2. Navigate to a BeamNG level directory (e.g., `/BeamNG.drive/content/levels/levels/small_island/`)
-3. Select any file in the level directory (the addon will detect the level automatically)
-4. Configure import options:
-   - ☑️ Import Terrain
-   - ☑️ Import Objects  
-   - ☑️ Import Materials
-   - ☐ Import Lighting
-5. Click "Import BeamNG Level"
-
-### Export Blender Scenes
-
-1. Create your level in Blender
-2. Click "Export Level" in the BeamNG panel or use `File > Export > BeamNG Level`
-3. Choose output directory and level name
-4. Configure export options:
-   - ☑️ Export Terrain
-   - ☑️ Export Objects
-   - ☑️ Export Materials
-   - ☑️ Export Config
-5. Click "Export BeamNG Level"
+- **Blender 4.0+** (tested with 4.3)
+- **Python 3.9+** with NumPy
+- **BeamNG.drive** (for test data)
 
 ## 🗂️ Supported File Formats
 
-### Import (Planned):
-- ✅ **Level Detection**: `info.json`, `mainLevel.lua`, `*.ter`
-- 🔧 **Terrain**: `.ter` (binary terrain data), `.terrain.json`
-- 🔧 **Objects**: `.prefab` (TorqueScript format)
-- 🔧 **Meshes**: `.dae` (Collada)
-- 🔧 **Textures**: `.dds`, `.png`, `.jpg`
-- 🔧 **Configuration**: Various `.json` files
+### ✅ Currently Supported
+- **`.ter`** - Binary terrain heightmaps (with corrected parser)
+- **`.terrain.json`** - Terrain configuration metadata
+- **Level Detection** - `info.json`, `mainLevel.lua`
 
-### Export (Planned):
-- 🔧 **Terrain**: `.ter` files
-- 🔧 **Objects**: `.prefab` files  
-- 🔧 **Configuration**: `info.json`, level structure
-- 🔧 **Assets**: Mesh and texture references
+### 🔄 Planned Support
+- **`.prefab`** - TorqueScript object definitions
+- **`.dds`** - DirectDraw Surface textures
+- **`.json`** - Various configuration files
+- **`.dae`** - Collada mesh files
 
-## 🏗️ Project Structure
+## 🏗️ Technical Details
 
+### EXR Displacement Pipeline
+1. **Parse `.ter` files** using corrected binary format (offset 2048, big-endian)
+2. **Normalize heightmap** to 0-1 range for displacement
+3. **Create 16-bit EXR texture** with RGBA channels (R=G=B=height, A=1)
+4. **Generate base plane** with subdivision surface modifier
+5. **Apply displacement material** with image texture and displacement nodes
+
+### Performance Considerations
+- **Subdivision Level 6**: ~4K triangles (good for preview)
+- **Subdivision Level 8**: ~65K triangles (high detail, may be slow)
+- **Subdivision Level 10**: ~1M triangles (production quality, GPU required)
+
+## 🧪 Testing with BeamNG Levels
+
+### Test Data Locations
+```bash
+# Default BeamNG installation (Steam)
+Windows: "Program Files (x86)/Steam/steamapps/common/BeamNG.drive/content/levels/levels/"
+macOS: "/Volumes/Goodboy/crossover/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/BeamNG.drive/content/levels/levels/"
+
+# Example levels to test:
+- small_island      # 1024x1024 island terrain
+- gridmap_v2        # Flat grid for testing
+- automation        # Complex multi-biome terrain
 ```
-beamng_blender_addon/
-├── __init__.py              # Main addon file with bl_info
-├── operators/               # Import/Export operators
-│   ├── __init__.py
-│   ├── import_level.py      # Level import functionality
-│   └── export_level.py      # Level export functionality
-├── ui/                      # User interface panels
-│   ├── __init__.py
-│   └── main_panel.py        # Main UI panel
-├── utils/                   # Utilities and helpers
-│   ├── __init__.py
-│   └── properties.py        # Addon properties
-├── parsers/                 # File format parsers (future)
-├── exporters/               # File format exporters (future)
-└── README.md
-```
 
-## 🔧 Development
+### Test Workflow
+1. Navigate to a level directory (e.g., `small_island/`)
+2. Ensure both `.ter` and `.terrain.json` files exist
+3. Import with displacement settings:
+   - Scale: 1.0
+   - Displacement: 100-200
+   - Subdivision: 6-7
+4. Verify terrain appears with proper island shape and elevation
 
-### Prerequisites
+## 📈 Development Status
 
-- Blender 3.0 or higher
-- Python 3.9+ (included with Blender)
-- BeamNG.drive (for testing exported levels)
+**Completed Tasks (12/67)**:
+- ✅ **Phase 1**: Foundation & addon structure
+- ✅ **Phase 2**: Terrain parsing & EXR displacement
+- 🔄 **Phase 3**: Static objects import (next)
 
-### Development Workflow
-
-1. **Install for development:**
-   ```bash
-   python install_addon.py --dev
-   ```
-
-2. **Make changes to the code**
-
-3. **Reload addon in Blender:**
-   - Disable the addon in Preferences
-   - Re-enable the addon
-   - Or restart Blender for major changes
-
-### Development Tools
-
-- **Install Script**: `install_addon.py` - Automated installation and packaging
-- **Task Tracking**: See `BeamNG_Blender_Task_Breakdown.md` for detailed task list
-- **Project Plan**: See `BeamNG_Blender_Importer_Plan.md` for overall project plan
-
-### Contributing
-
-This project follows the task breakdown in `BeamNG_Blender_Task_Breakdown.md`. Current focus areas:
-
-1. **Phase 2: Terrain Import** (Weeks 3-4)
-   - `.ter` file parsing
-   - Heightmap to mesh conversion
-   - DDS texture conversion
-
-2. **Phase 3: Static Objects** (Weeks 5-6)
-   - Prefab file parsing
-   - Collada mesh import
-   - Scene hierarchy
-
-## 📋 Roadmap
-
-| Phase | Timeline | Status | Description |
-|-------|----------|--------|-------------|
-| **Phase 1** | Weeks 1-2 | ✅ **Complete** | Foundation & Research |
-| **Phase 2** | Weeks 3-4 | 🔄 **Next** | Terrain Import |
-| **Phase 3** | Weeks 5-6 | ⏳ Planned | Static Objects Import |
-| **Phase 4** | Weeks 7-8 | ⏳ Planned | Materials and Textures |
-| **Phase 5** | Weeks 9-10 | ⏳ Planned | Level Metadata & Config |
-| **Phase 6** | Weeks 11-13 | ⏳ Planned | Export Functionality |
-| **Phase 7** | Weeks 14-15 | ⏳ Planned | UI & Polish |
-| **Phase 8** | Weeks 16-17 | ⏳ Planned | Testing & Optimization |
+See [BeamNG_Blender_Task_Breakdown.md](BeamNG_Blender_Task_Breakdown.md) for detailed progress.
 
 ## 🐛 Known Issues
 
-- Import/Export functions are currently placeholders (Phase 1 complete)
-- Terrain parsing not yet implemented (Phase 2)
-- Material conversion requires `oiiotool` dependency (Phase 4)
+- High subdivision levels may cause viewport lag
+- Displacement strength requires manual adjustment per terrain
+- Layer map texture blending not yet implemented
+- Some terrain edge artifacts in complex landscapes
 
-## 📚 Documentation
+## 🤝 Contributing
 
-- **[Project Plan](BeamNG_Blender_Importer_Plan.md)** - Comprehensive development plan
-- **[Task Breakdown](BeamNG_Blender_Task_Breakdown.md)** - Detailed task list with progress tracking
-- **[BeamNG Documentation](https://documentation.beamng.com/)** - Official BeamNG modding docs
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-## 🤝 Support
+## 📝 License
 
-- **Issues**: Report bugs and feature requests via GitHub Issues
-- **Development**: Check the task breakdown for current priorities
-- **Testing**: Test with BeamNG levels located at: `/BeamNG.drive/content/levels/levels/`
+This project is licensed under Unlicense - see [LICENSE](LICENSE) for details.
 
-## 📄 License
+## 🙏 Acknowledgments
 
-[Specify your license here]
+- BeamNG GmbH for the amazing BeamNG.drive simulation
+- Blender Foundation for the powerful 3D creation suite
+- Community contributors and testers
 
 ---
 
-**Note**: This addon is in active development. Features marked with 🔧 are planned but not yet implemented. See the task breakdown for detailed progress tracking. 
+For issues or questions, please open a GitHub issue. 
