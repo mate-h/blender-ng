@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-BeamNG .ter Terrain Parser - Final Corrected Version
+BeamNG .ter Terrain Parser - Fixed Version
 
-BREAKTHROUGH: Data starts at offset 2048 and uses big-endian 16-bit interpretation, which fixes the wrapping issue.
+Data starts at offset 5 (after header). All data uses little-endian encoding.
 """
 
 import struct
 import json
 import numpy as np
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional
 
 class BeamNGTerrainParser:
     def __init__(self, ter_file: str, json_file: str):
@@ -29,17 +29,17 @@ class BeamNGTerrainParser:
         self.layermap_item_size = self.config['layerMapItemSize']
         self.materials = self.config['materials']
         
-        print(f"🏞️  BeamNG Terrain Parser (FINAL CORRECTED)")
+        print("🏞️  BeamNG Terrain Parser")
         print(f"📁 Terrain: {self.ter_file.name}")
         print(f"📊 Dimensions: {self.size}x{self.size}")
         print(f"🎭 Materials: {len(self.materials)}")
-        print(f"✅ Using offset 2048 with big-endian encoding")
+        print("✅ Using offset 5 (after header), all data: little-endian")
     
     def parse_terrain(self) -> Dict:
-        """Parse the terrain file using corrected offset and encoding"""
+        """Parse the terrain file using CORRECTED offset and encoding"""
         
         with open(self.ter_file, 'rb') as f:
-            # Read header (still little-endian)
+            # Read header (little-endian)
             version = struct.unpack('B', f.read(1))[0]
             size = struct.unpack('<I', f.read(4))[0]
             
@@ -47,11 +47,11 @@ class BeamNGTerrainParser:
             if version != self.version or size != self.size:
                 raise ValueError(f"Header mismatch: got version={version}, size={size}")
             
-            # CORRECTED: Data starts at offset 2048, not 271!
-            data_start = 2048
-            print(f"📍 Using corrected data offset: {data_start} (0x{data_start:x})")
+            # FIXED: Data starts at offset 5 (immediately after header)
+            data_start = 5
+            print(f"📍 Using CORRECTED data offset: {data_start} (0x{data_start:x})")
             
-            # Read heightmap with big-endian encoding
+            # Read heightmap with LITTLE-ENDIAN encoding
             f.seek(data_start)
             heightmap_bytes = self.heightmap_size * self.heightmap_item_size
             heightmap_data = f.read(heightmap_bytes)
@@ -59,40 +59,79 @@ class BeamNGTerrainParser:
             if len(heightmap_data) != heightmap_bytes:
                 print(f"⚠️  Warning: Expected {heightmap_bytes} bytes, got {len(heightmap_data)}")
             
-            # CORRECTED: Parse as 16-bit BIG-ENDIAN (not little-endian)
+            # Parse as 16-bit LITTLE-ENDIAN (CORRECTED)
             num_heights = len(heightmap_data) // 2
-            heights = struct.unpack(f'>{num_heights}H', heightmap_data)  # >H = big-endian
+            heights = struct.unpack(f'<{num_heights}H', heightmap_data)  # <H = little-endian
             
             # Reshape to 2D
             heightmap = np.array(heights, dtype=np.uint16).reshape((self.size, self.size))
             
-            # Try to read layer map (this might still be at different location)
-            # For now, skip layer map parsing as we're focusing on heightmap
+            # Calculate layer map position
+            layermap_start = data_start + heightmap_bytes
             layermap = None
             
-            # Calculate expected layer map position
-            layermap_start = data_start + heightmap_bytes
             try:
                 f.seek(layermap_start)
-                layermap_bytes = self.layermap_size * self.layermap_item_size
-                layermap_data = f.read(layermap_bytes)
                 
-                if len(layermap_data) > 0:
+                # Calculate how much layermap data is actually available
+                remaining_file_bytes = len(f.read())  # Read to end to get remaining size
+                f.seek(layermap_start)  # Seek back
+                
+                expected_layermap_bytes = self.layermap_size * self.layermap_item_size
+                available_layermap_bytes = min(expected_layermap_bytes, remaining_file_bytes)
+                
+                print("📊 Layermap info:")
+                print(f"   Expected: {expected_layermap_bytes:,} bytes")
+                print(f"   Available: {available_layermap_bytes:,} bytes")
+                
+                if available_layermap_bytes > 0:
+                    layermap_data = f.read(available_layermap_bytes)
                     layers = struct.unpack(f'{len(layermap_data)}B', layermap_data)
-                    if len(layers) == self.layermap_size:
-                        layermap = np.array(layers, dtype=np.uint8).reshape((self.size, self.size))
-                        print(f"✅ Layer map loaded: {layermap.shape}")
+                    
+                    # Calculate how many complete rows we have
+                    pixels_available = len(layers)
+                    complete_rows = pixels_available // self.size
+                    remaining_pixels = pixels_available % self.size
+                    
+                    print(f"   Pixels available: {pixels_available:,}")
+                    print(f"   Complete rows: {complete_rows}")
+                    print(f"   Remaining pixels: {remaining_pixels}")
+                    
+                    if complete_rows > 0:
+                        # Create layermap with available data, pad with zeros if needed
+                        if pixels_available == self.layermap_size:
+                            # Perfect match
+                            layermap = np.array(layers, dtype=np.uint8).reshape((self.size, self.size))
+                            print(f"✅ Complete layer map loaded: {layermap.shape}")
+                        else:
+                            # Partial data - pad with zeros or truncate
+                            if pixels_available < self.layermap_size:
+                                # Pad with zeros
+                                padded_layers = list(layers) + [0] * (self.layermap_size - pixels_available)
+                                layermap = np.array(padded_layers, dtype=np.uint8).reshape((self.size, self.size))
+                                print(f"⚠️  Partial layer map loaded and padded: {layermap.shape}")
+                            else:
+                                # Truncate to expected size
+                                truncated_layers = layers[:self.layermap_size]
+                                layermap = np.array(truncated_layers, dtype=np.uint8).reshape((self.size, self.size))
+                                print(f"⚠️  Layer map loaded and truncated: {layermap.shape}")
                     else:
-                        print(f"⚠️  Layer map size mismatch: got {len(layers)}, expected {self.layermap_size}")
+                        print("❌ Not enough data for even one complete row")
+                        layermap = None
+                else:
+                    print("❌ No layermap data available")
+                    layermap = None
+                    
             except Exception as e:
                 print(f"❌ Could not read layer map: {e}")
+                layermap = None
             
             return {
                 'header': {
                     'version': version,
                     'size': size,
                     'data_start': data_start,
-                    'encoding': 'big_endian_16bit'
+                    'encoding': 'all_little_endian'  # CORRECTED encoding description
                 },
                 'heightmap': heightmap,
                 'layermap': layermap,
@@ -168,11 +207,6 @@ class BeamNGTerrainParser:
                 'dimensions': [self.size, self.size],
                 'heightmap_file': 'heightmap.npy',
                 'layermap_file': 'layermap.npy' if layermap is not None else None,
-                'fixed_issues': [
-                    'Corrected data offset from 271 to 2048',
-                    'Fixed encoding from little-endian to big-endian 16-bit',
-                    'Eliminated wrapping/offset artifacts'
-                ]
             },
             'heightmap_stats': stats,
             'materials': {
@@ -198,7 +232,7 @@ class BeamNGTerrainParser:
         return blender_metadata
 
 def main():
-    """Test the final corrected parser"""
+    """Test the FIXED parser with correct offset and endianness"""
     default_path = "/Volumes/Goodboy/crossover/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/BeamNG.drive/content/levels/levels/small_island"
     
     ter_file = f"{default_path}/small_island.ter"
@@ -208,24 +242,25 @@ def main():
     parser = BeamNGTerrainParser(ter_file, json_file)
     
     # Parse and export
-    metadata = parser.export_for_blender()
+    parser.export_for_blender()
     
     # Print verification
     terrain_data = parser.parse_terrain()
     heightmap = terrain_data['heightmap']
     stats = parser.get_terrain_stats(heightmap)
     
-    print(f"\n🎉 CORRECTED TERRAIN STATS:")
+    print("\n🎉 FIXED TERRAIN STATS (Offset 5, Little-Endian):")
     print(f"   Shape: {stats['shape']}")
     print(f"   Height range: {stats['min_height']} - {stats['max_height']}")
     print(f"   Mean height: {stats['mean_height']:.1f}")
     print(f"   Unique values: {stats['unique_values']:,}")
     print(f"   Water area: {stats['zero_percentage']:.1f}%")
     
-    print(f"\n✅ SUCCESS: Terrain parsing fixed!")
-    print(f"   - No more wrapping artifacts")
-    print(f"   - Realistic topographic features")
-    print(f"   - Ready for Blender import")
+    print("\n✅ SUCCESS: Critical format issues FIXED!")
+    print("   - Offset corrected: 2048 → 5")
+    print("   - Endianness corrected: big → little")
+    print("   - Should eliminate banding artifacts")
+    print("   - Ready for Blender import")
 
 if __name__ == "__main__":
     main() 

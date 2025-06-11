@@ -139,6 +139,38 @@ See [BeamNG_Blender_Task_Breakdown.md](BeamNG_Blender_Task_Breakdown.md) for det
 - Layer map texture blending not yet implemented
 - Some terrain edge artifacts in complex landscapes
 
+## 🔧 Development & Debugging
+
+### Hot-Reload Addon During Development
+
+When developing or debugging the addon, you can hot-reload it without restarting Blender:
+
+1. **Open Blender's Scripting Workspace**
+2. **Paste this code snippet** into the text editor:
+
+```python
+def reload_addon(module_name='beamng_blender_addon'):
+    import sys
+    modules_to_remove = [name for name in sys.modules.keys() if name.startswith(module_name)]
+    for module_name in modules_to_remove:
+        del sys.modules[module_name]
+    
+    # Now disable and re-enable
+    import addon_utils
+    addon_utils.disable(module_name)
+    addon_utils.enable(module_name)
+    
+reload_addon()
+```
+
+3. **Run the script** - This will completely reload the addon with your latest changes
+4. **Alternative**: You can also run this one-liner in the Python console:
+   ```python
+   exec("import sys; [sys.modules.pop(k) for k in [k for k in sys.modules.keys() if k.startswith('beamng_blender_addon')]]; import addon_utils; addon_utils.disable('beamng_blender_addon'); addon_utils.enable('beamng_blender_addon')")
+   ```
+
+This method cleans the Python module cache and forces a complete reload, which is more reliable than the standard disable/enable approach for complex multi-module addons.
+
 ## 🤝 Contributing
 
 1. Fork the repository

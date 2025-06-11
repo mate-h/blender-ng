@@ -3,13 +3,12 @@ UI module for BeamNG Blender addon
 Contains all user interface panels and elements
 """
 
-from .main_panel import BeamNGMainPanel, BeamNGTerrainPanel
+from .main_panel import BeamNGMainPanel
 from . import main_panel
 
 # List of UI classes
 classes = [
     BeamNGMainPanel,
-    BeamNGTerrainPanel,
 ]
 
 def register():
@@ -18,7 +17,7 @@ def register():
     for cls in classes:
         register_class(cls)
     
-    # Register terrain panel properties
+    # Register main panel
     main_panel.register()
     
     print("BeamNG UI: Registered")
@@ -27,7 +26,7 @@ def unregister():
     """Unregister all UI classes"""
     from bpy.utils import unregister_class
     
-    # Unregister terrain panel properties
+    # Unregister main panel
     main_panel.unregister()
     
     for cls in reversed(classes):

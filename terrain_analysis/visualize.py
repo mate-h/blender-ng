@@ -8,8 +8,7 @@ the terrain is properly loaded without wrapping artifacts.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
-from terrain_analysis.ter_parser import BeamNGTerrainParser
+from ter_parser import BeamNGTerrainParser
 
 def visualize_corrected_terrain():
     """Visualize the final corrected terrain data"""
@@ -24,95 +23,88 @@ def visualize_corrected_terrain():
     # Parse terrain
     terrain_data = parser.parse_terrain()
     heightmap = terrain_data['heightmap']
+    layermap = terrain_data['layermap']
+    materials = terrain_data['materials']
     
-    print(f"Terrain data loaded successfully!")
+    print("Terrain data loaded successfully!")
     print(f"   Shape: {heightmap.shape}")
     print(f"   Min/Max heights: {heightmap.min()} / {heightmap.max()}")
     print(f"   Mean height: {heightmap.mean():.1f}")
     print(f"   Unique values: {len(np.unique(heightmap)):,}")
     
-    # Create comprehensive visualization
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle('BeamNG Small Island - CORRECTED (No Wrapping!)', fontsize=16, color='green', weight='bold')
+    # Create simplified visualization with 3 key plots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle('BeamNG Small Island', fontsize=16, color='gray', weight='bold')
     
-    # 1. Full heightmap
-    im1 = axes[0,0].imshow(heightmap, cmap='terrain', aspect='equal', origin='lower')
-    axes[0,0].set_title('Corrected Heightmap\n(Offset 2048, Big-Endian)')
-    axes[0,0].set_xlabel('X (East)')
-    axes[0,0].set_ylabel('Y (North)')
-    plt.colorbar(im1, ax=axes[0,0], label='Height Value')
+    # 1. Heightmap
+    im1 = axes[0].imshow(heightmap, cmap='terrain', aspect='equal', origin='lower')
+    axes[0].set_title('Heightmap', fontsize=12, weight='bold')
+    axes[0].set_xlabel('X (East)')
+    axes[0].set_ylabel('Y (North)')
+    plt.colorbar(im1, ax=axes[0], label='Height Value')
     
-    # 2. Height histogram
-    axes[0,1].hist(heightmap.flatten(), bins=100, alpha=0.7, color='green', edgecolor='black')
-    axes[0,1].set_title('Height Distribution')
-    axes[0,1].set_xlabel('Height Value')
-    axes[0,1].set_ylabel('Frequency')
-    axes[0,1].grid(True, alpha=0.3)
+    # 2. Materials/Layermap visualization
+    if layermap is not None:
+        # Create a custom colormap for materials
+        import matplotlib.colors as mcolors
+        n_materials = len(materials)
+        colors = plt.cm.Set3(np.linspace(0, 1, n_materials))
+        material_cmap = mcolors.ListedColormap(colors)
+        
+        im2 = axes[1].imshow(layermap, cmap=material_cmap, aspect='equal', origin='lower', vmin=0, vmax=n_materials-1)
+        axes[1].set_title('Material Layers', fontsize=12, weight='bold')
+        axes[1].set_xlabel('X (East)')
+        axes[1].set_ylabel('Y (North)')
+        
+        # Create custom colorbar with material names
+        cbar2 = plt.colorbar(im2, ax=axes[1], label='Material ID')
+        if len(materials) <= 11:  # Only show labels if reasonable number
+            cbar2.set_ticks(range(len(materials)))
+            cbar2.set_ticklabels([f"{i}: {mat[:8]}" for i, mat in enumerate(materials)])
+        
+        # Show material statistics
+        unique_mats, counts = np.unique(layermap, return_counts=True)
+        print("\n🎨 Material Distribution:")
+        for mat_id, count in zip(unique_mats, counts):
+            if mat_id < len(materials):
+                percentage = count / layermap.size * 100
+                print(f"   {materials[mat_id]}: {percentage:.1f}%")
+    else:
+        axes[1].text(0.5, 0.5, 'No Layermap\nData Available', 
+                      transform=axes[1].transAxes, ha='center', va='center',
+                      fontsize=14, bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+        axes[1].set_title('Material Distribution\n(Not Available)', fontsize=12)
     
-    # Add statistics
-    mean_h = heightmap.mean()
-    std_h = heightmap.std()
-    axes[0,1].axvline(mean_h, color='red', linestyle='--', label=f'Mean: {mean_h:.0f}')
-    axes[0,1].axvline(mean_h + std_h, color='orange', linestyle='--', label=f'+1σ: {mean_h + std_h:.0f}')
-    axes[0,1].axvline(mean_h - std_h, color='orange', linestyle='--', label=f'-1σ: {mean_h - std_h:.0f}')
-    axes[0,1].legend()
-    
-    # 3. Edge analysis (to verify no wrapping)
-    axes[1,0].plot(heightmap[:, 0], label='Left edge', alpha=0.7)
-    axes[1,0].plot(heightmap[:, -1], label='Right edge', alpha=0.7)
-    axes[1,0].plot(heightmap[0, :], label='Bottom edge', alpha=0.7)
-    axes[1,0].plot(heightmap[-1, :], label='Top edge', alpha=0.7)
-    axes[1,0].set_title('Edge Analysis\n(Should show smooth coastlines)')
-    axes[1,0].set_xlabel('Position along edge')
-    axes[1,0].set_ylabel('Height')
-    axes[1,0].legend()
-    axes[1,0].grid(True, alpha=0.3)
-    
-    # 4. Gradient magnitude (terrain steepness)
+    # 3. Terrain steepness
     grad_y, grad_x = np.gradient(heightmap.astype(np.float32))
     gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
     
-    im4 = axes[1,1].imshow(gradient_magnitude, cmap='hot', aspect='equal', origin='lower')
-    axes[1,1].set_title('Terrain Steepness\n(Gradient Magnitude)')
-    axes[1,1].set_xlabel('X (East)')
-    axes[1,1].set_ylabel('Y (North)')
-    plt.colorbar(im4, ax=axes[1,1], label='Gradient Magnitude')
+    # Use a more dramatic colormap and scale
+    im3 = axes[2].imshow(gradient_magnitude, cmap='plasma', aspect='equal', origin='lower')
+    axes[2].set_title('Terrain Steepness', fontsize=12, weight='bold')
+    axes[2].set_xlabel('X (East)')
+    axes[2].set_ylabel('Y (North)')
+    plt.colorbar(im3, ax=axes[2], label='Gradient')
+    
+    # Add dramatic color scaling
+    gradient_99th = np.percentile(gradient_magnitude, 99)
+    im3.set_clim(0, gradient_99th)  # Clip to 99th percentile for more dramatic contrast
     
     plt.tight_layout()
-    
+
     # Save visualization
-    output_file = "final_corrected_terrain.png"
+    output_file = "terrain_visualization.png"
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
     print(f"📊 Visualization saved to: {output_file}")
     
     plt.show()
-    
-    # Analyze edge continuity to verify no wrapping
-    left_edge = heightmap[:, 0]
-    right_edge = heightmap[:, -1]
-    top_edge = heightmap[0, :]
-    bottom_edge = heightmap[-1, :]
-    
-    lr_diff = np.mean(np.abs(left_edge - right_edge))
-    tb_diff = np.mean(np.abs(top_edge - bottom_edge))
-    
-    print(f"\n🔍 Edge Continuity Analysis:")
-    print(f"   Left-Right edge difference: {lr_diff:.1f}")
-    print(f"   Top-Bottom edge difference: {tb_diff:.1f}")
-    
-    if lr_diff < 5000 and tb_diff < 5000:
-        print(f"✅ EXCELLENT: Low edge differences indicate proper terrain continuity!")
-    elif lr_diff < 15000 and tb_diff < 15000:
-        print(f"✅ GOOD: Moderate edge differences, much better than before!")
-    else:
-        print(f"⚠️  CAUTION: Still some edge discontinuities")
     
     # Check for realistic terrain features
     water_threshold = np.percentile(heightmap, 10)
     land_areas = heightmap > water_threshold
     water_areas = heightmap <= water_threshold
     
-    print(f"\n🌊 Terrain Features:")
+    print("\n🌊 Terrain Features:")
     print(f"   Water threshold: {water_threshold:.0f}")
     print(f"   Land area: {np.sum(land_areas)/heightmap.size*100:.1f}%")
     print(f"   Water/low areas: {np.sum(water_areas)/heightmap.size*100:.1f}%")

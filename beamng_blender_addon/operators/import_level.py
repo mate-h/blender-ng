@@ -20,8 +20,11 @@ addon_dir = Path(__file__).parent.parent
 if str(addon_dir) not in sys.path:
     sys.path.append(str(addon_dir))
 
+# Import BeamNG terrain node group
+from ..utils.beamng_terrain_node_group import beamng_terrain_node_group
+
 class BeamNGTerrainParser:
-    """Integrated BeamNG terrain parser for the addon"""
+    """Integrated BeamNG terrain parser for the addon - SOURCE OF TRUTH from ter_parser.py"""
     
     def __init__(self, ter_file: str, json_file: str):
         self.ter_file = Path(ter_file)
@@ -36,13 +39,18 @@ class BeamNGTerrainParser:
         self.size = self.config['size']
         self.heightmap_size = self.config['heightMapSize']
         self.heightmap_item_size = self.config['heightMapItemSize']
+        self.layermap_size = self.config['layerMapSize']
+        self.layermap_item_size = self.config['layerMapItemSize']
+        self.materials = self.config['materials']
         
-        print(f"🏞️  BeamNG Terrain Parser")
+        print("🏞️  BeamNG Terrain Parser")
         print(f"📁 Terrain: {self.ter_file.name}")
         print(f"📊 Dimensions: {self.size}x{self.size}")
+        print(f"🎭 Materials: {len(self.materials)}")
+        print("✅ Using offset 5 (after header), all data: little-endian")
     
     def parse_terrain(self):
-        """Parse the terrain file using corrected offset and encoding"""
+        """Parse the terrain file using CORRECTED offset and encoding"""
         
         with open(self.ter_file, 'rb') as f:
             # Read header (little-endian)
@@ -53,11 +61,11 @@ class BeamNGTerrainParser:
             if version != self.version or size != self.size:
                 raise ValueError(f"Header mismatch: got version={version}, size={size}")
             
-            # CORRECTED: Data starts at offset 2048, big-endian
-            data_start = 2048
-            print(f"📍 Using corrected data offset: {data_start}")
+            # FIXED: Data starts at offset 5 (immediately after header)
+            data_start = 5
+            print(f"📍 Using CORRECTED data offset: {data_start} (0x{data_start:x})")
             
-            # Read heightmap with big-endian encoding
+            # Read heightmap with LITTLE-ENDIAN encoding
             f.seek(data_start)
             heightmap_bytes = self.heightmap_size * self.heightmap_item_size
             heightmap_data = f.read(heightmap_bytes)
@@ -65,22 +73,99 @@ class BeamNGTerrainParser:
             if len(heightmap_data) != heightmap_bytes:
                 print(f"⚠️  Warning: Expected {heightmap_bytes} bytes, got {len(heightmap_data)}")
             
-            # Parse as 16-bit BIG-ENDIAN
+            # Parse as 16-bit LITTLE-ENDIAN (CORRECTED)
             num_heights = len(heightmap_data) // 2
-            heights = struct.unpack(f'>{num_heights}H', heightmap_data)  # >H = big-endian
+            heights = struct.unpack(f'<{num_heights}H', heightmap_data)  # <H = little-endian
             
             # Reshape to 2D
             heightmap = np.array(heights, dtype=np.uint16).reshape((self.size, self.size))
+            
+            # Calculate layer map position
+            layermap_start = data_start + heightmap_bytes
+            layermap = None
+            
+            try:
+                f.seek(layermap_start)
+                
+                # Calculate how much layermap data is actually available
+                remaining_file_bytes = len(f.read())  # Read to end to get remaining size
+                f.seek(layermap_start)  # Seek back
+                
+                expected_layermap_bytes = self.layermap_size * self.layermap_item_size
+                available_layermap_bytes = min(expected_layermap_bytes, remaining_file_bytes)
+                
+                print("📊 Layermap info:")
+                print(f"   Expected: {expected_layermap_bytes:,} bytes")
+                print(f"   Available: {available_layermap_bytes:,} bytes")
+                
+                if available_layermap_bytes > 0:
+                    layermap_data = f.read(available_layermap_bytes)
+                    layers = struct.unpack(f'{len(layermap_data)}B', layermap_data)
+                    
+                    # Calculate how many complete rows we have
+                    pixels_available = len(layers)
+                    complete_rows = pixels_available // self.size
+                    remaining_pixels = pixels_available % self.size
+                    
+                    print(f"   Pixels available: {pixels_available:,}")
+                    print(f"   Complete rows: {complete_rows}")
+                    print(f"   Remaining pixels: {remaining_pixels}")
+                    
+                    if complete_rows > 0:
+                        # Create layermap with available data, pad with zeros if needed
+                        if pixels_available == self.layermap_size:
+                            # Perfect match
+                            layermap = np.array(layers, dtype=np.uint8).reshape((self.size, self.size))
+                            print(f"✅ Complete layer map loaded: {layermap.shape}")
+                        else:
+                            # Partial data - pad with zeros or truncate
+                            if pixels_available < self.layermap_size:
+                                # Pad with zeros
+                                padded_layers = list(layers) + [0] * (self.layermap_size - pixels_available)
+                                layermap = np.array(padded_layers, dtype=np.uint8).reshape((self.size, self.size))
+                                print(f"⚠️  Partial layer map loaded and padded: {layermap.shape}")
+                            else:
+                                # Truncate to expected size
+                                truncated_layers = layers[:self.layermap_size]
+                                layermap = np.array(truncated_layers, dtype=np.uint8).reshape((self.size, self.size))
+                                print(f"⚠️  Layer map loaded and truncated: {layermap.shape}")
+                    else:
+                        print("❌ Not enough data for even one complete row")
+                        layermap = None
+                else:
+                    print("❌ No layermap data available")
+                    layermap = None
+                    
+            except Exception as e:
+                print(f"❌ Could not read layer map: {e}")
+                layermap = None
             
             return {
                 'header': {
                     'version': version,
                     'size': size,
                     'data_start': data_start,
+                    'encoding': 'all_little_endian'  # CORRECTED encoding description
                 },
                 'heightmap': heightmap,
+                'layermap': layermap,
+                'materials': self.materials,
                 'config': self.config
             }
+    
+    def get_terrain_stats(self, heightmap: np.ndarray):
+        """Calculate terrain statistics"""
+        return {
+            'shape': heightmap.shape,
+            'min_height': int(np.min(heightmap)),
+            'max_height': int(np.max(heightmap)),
+            'mean_height': float(np.mean(heightmap)),
+            'std_height': float(np.std(heightmap)),
+            'median_height': float(np.median(heightmap)),
+            'unique_values': len(np.unique(heightmap)),
+            'zero_count': int(np.sum(heightmap == 0)),
+            'zero_percentage': float(np.sum(heightmap == 0) / heightmap.size * 100)
+        }
 
 class ImportBeamNGLevel(Operator, ImportHelper):
     """Import BeamNG.drive Level Data"""
@@ -226,16 +311,26 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             parser = BeamNGTerrainParser(ter_file, json_file)
             terrain_data = parser.parse_terrain()
             heightmap = terrain_data['heightmap']
+            layermap = terrain_data['layermap']
             
             # Create EXR displacement texture
             self.report({'INFO'}, "Creating 16-bit EXR displacement texture...")
             displacement_texture = self.create_displacement_texture(heightmap)
             
-            # Create terrain mesh with displacement
-            self.report({'INFO'}, "Creating terrain mesh with displacement...")
-            terrain_obj = self.create_terrain_with_displacement(
-                heightmap, displacement_texture, terrain_data['config']
+            # Create layermap texture if available
+            layermap_texture = None
+            if layermap is not None:
+                self.report({'INFO'}, "Creating layermap texture...")
+                layermap_texture = self.create_layermap_texture(layermap, terrain_data['materials'])
+            
+            # Create terrain mesh with BeamNG node group
+            self.report({'INFO'}, "Creating terrain mesh with BeamNG node group...")
+            terrain_obj = self.create_terrain_with_node_group(
+                displacement_texture, layermap_texture, terrain_data['config']
             )
+            
+            # Adjust camera clip planes for large terrain
+            self.adjust_camera_clip_planes()
             
             self.report({'INFO'}, f"Terrain imported successfully: {terrain_obj.name}")
             return {'FINISHED'}
@@ -286,80 +381,137 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         print(f"✅ Created displacement texture: {image_name} ({width}x{height})")
         return displacement_image
     
-    def create_terrain_with_displacement(self, heightmap, displacement_texture, config):
-        """Create terrain mesh using displacement modifier"""
+    def create_layermap_texture(self, layermap, materials):
+        """Create a texture for the layermap (material indices)"""
         
-        # Get terrain dimensions and settings from scene properties
+        # Create Blender image
+        image_name = "BeamNG_Terrain_Layermap"
+        
+        # Remove existing image if it exists
+        if image_name in bpy.data.images:
+            bpy.data.images.remove(bpy.data.images[image_name])
+        
+        # Create new image
+        height, width = layermap.shape
+        layermap_image = bpy.data.images.new(
+            name=image_name,
+            width=width,
+            height=height,
+            alpha=False,
+            float_buffer=False  # Use 8-bit for material indices
+        )
+        
+        # Normalize layermap to 0-1 range for material IDs
+        # Convert material indices to normalized values (0-1)
+        max_material_id = len(materials) - 1 if materials else 255
+        layermap_normalized = layermap.astype(np.float32) / max_material_id
+        
+        # Convert layermap to RGBA format for Blender (R=material_id, G=material_id, B=material_id, A=1)
+        rgba_data = np.zeros((height, width, 4), dtype=np.float32)
+        rgba_data[:, :, 0] = layermap_normalized  # Red channel
+        rgba_data[:, :, 1] = layermap_normalized  # Green channel  
+        rgba_data[:, :, 2] = layermap_normalized  # Blue channel
+        rgba_data[:, :, 3] = 1.0  # Alpha channel
+        
+        # Flatten for Blender (Blender expects flattened RGBA array)
+        layermap_image.pixels = rgba_data.flatten()
+        
+        # Update image
+        layermap_image.update()
+        
+        # Set colorspace to Non-Color for data textures
+        layermap_image.colorspace_settings.name = 'Non-Color'
+        
+        print(f"✅ Created layermap texture: {image_name} ({width}x{height})")
+        print(f"   Materials: {len(materials)} ({max_material_id} max ID)")
+        
+        return layermap_image
+    
+    def create_terrain_with_node_group(self, displacement_texture, layermap_texture, config):
+        """Create terrain mesh using BeamNG geometry node group"""
+        
+        # Get terrain dimensions and settings
         terrain_size = config['size']
-        world_scale = bpy.context.scene.beamng_terrain_scale if hasattr(bpy.context.scene, 'beamng_terrain_scale') else self.terrain_scale
-        displacement_strength = bpy.context.scene.beamng_displacement_strength if hasattr(bpy.context.scene, 'beamng_displacement_strength') else self.displacement_strength
-        subdivision_levels = bpy.context.scene.beamng_subdivision_levels if hasattr(bpy.context.scene, 'beamng_subdivision_levels') else self.subdivision_levels
+        world_scale = getattr(bpy.context.scene, 'beamng_terrain_scale', self.terrain_scale)
+        displacement_strength = getattr(bpy.context.scene, 'beamng_displacement_strength', self.displacement_strength)
         
         # Create base plane mesh
-        bpy.ops.mesh.primitive_plane_add(size=terrain_size * world_scale)
+        bpy.ops.mesh.primitive_plane_add(size=1.0)  # Unit size, will be scaled by node group
         terrain_obj = bpy.context.active_object
         terrain_obj.name = "BeamNG_Terrain"
         
-        # Add subdivision surface modifier for detail
-        subdiv_mod = terrain_obj.modifiers.new(name="Subdivision", type='SUBSURF')
-        subdiv_mod.levels = subdivision_levels
-        subdiv_mod.render_levels = subdivision_levels
+        # Create or get the BeamNG terrain node group
+        node_group = beamng_terrain_node_group(displacement_texture, layermap_texture)
         
-        # Create material with displacement
-        material = bpy.data.materials.new(name="BeamNG_Terrain_Material")
-        material.use_nodes = True
-        nodes = material.node_tree.nodes
-        links = material.node_tree.links
+        # Add geometry nodes modifier
+        geo_nodes_mod = terrain_obj.modifiers.new(name="BeamNG_Terrain", type='NODES')
+        geo_nodes_mod.node_group = node_group
         
-        # Clear default nodes
-        nodes.clear()
+        # Set node group parameters
+        # Size (terrain dimensions in world units)
+        geo_nodes_mod["Input_2"] = terrain_size * world_scale
         
-        # Add material output
-        output_node = nodes.new(type='ShaderNodeOutputMaterial')
-        output_node.location = (300, 0)
+        # Resolution (number of vertices per axis, calculated from heightmap)
+        heightmap_resolution = config.get('heightMapSize', 1024)
+        # Calculate resolution as square root since heightMapSize is total pixels
+        vertex_resolution = int(np.sqrt(heightmap_resolution))
+        geo_nodes_mod["Input_3"] = vertex_resolution
         
-        # Add principled BSDF
-        bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
-        bsdf_node.location = (0, 0)
+        # Height (displacement strength)
+        geo_nodes_mod["Input_4"] = displacement_strength
         
-        # Add texture coordinate node
-        tex_coord_node = nodes.new(type='ShaderNodeTexCoord')
-        tex_coord_node.location = (-600, 0)
-        
-        # Add image texture node for displacement
-        image_node = nodes.new(type='ShaderNodeTexImage')
-        image_node.location = (-300, -200)
-        image_node.image = displacement_texture
-        
-        # Add displacement node
-        displacement_node = nodes.new(type='ShaderNodeDisplacement')
-        displacement_node.location = (0, -200)
-        displacement_node.inputs['Scale'].default_value = displacement_strength
-        
-        # Connect nodes
-        links.new(tex_coord_node.outputs['Generated'], image_node.inputs['Vector'])
-        links.new(image_node.outputs['Color'], displacement_node.inputs['Height'])
-        links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
-        links.new(displacement_node.outputs['Displacement'], output_node.inputs['Displacement'])
-        
-        # Set material color to terrain-like green
-        bsdf_node.inputs['Base Color'].default_value = (0.2, 0.6, 0.1, 1.0)  # Green
-        bsdf_node.inputs['Roughness'].default_value = 0.8
-        
-        # Assign material to object
-        terrain_obj.data.materials.append(material)
-        
-        # Set subdivision surface to smooth
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.faces_shade_smooth()
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
-        print(f"✅ Created terrain mesh with displacement: {terrain_obj.name}")
+        print(f"✅ Created terrain mesh with BeamNG node group: {terrain_obj.name}")
         print(f"   Size: {terrain_size * world_scale} units")
-        print(f"   Subdivision levels: {subdivision_levels}")
-        print(f"   Displacement strength: {displacement_strength}")
+        print(f"   Resolution: {vertex_resolution}x{vertex_resolution}")
+        print(f"   Height: {displacement_strength}")
         
         return terrain_obj
+    
+    def adjust_camera_clip_planes(self):
+        """Adjust camera clip planes to handle large terrain better"""
+        
+        # Get the active scene
+        scene = bpy.context.scene
+        
+        # Adjust clip planes for all cameras in the scene
+        cameras_adjusted = 0
+        for obj in scene.objects:
+            if obj.type == 'CAMERA':
+                camera_data = obj.data
+                
+                # Adjust near clip plane (increase by one order of magnitude if < 0.1)
+                if camera_data.clip_start < 0.1:
+                    old_near = camera_data.clip_start
+                    camera_data.clip_start = min(old_near * 10, 0.1)
+                    print(f"📷 Camera '{obj.name}' near clip: {old_near} → {camera_data.clip_start}")
+                
+                # Adjust far clip plane (increase by one order of magnitude if < 10000)
+                if camera_data.clip_end < 10000:
+                    old_far = camera_data.clip_end
+                    camera_data.clip_end = min(old_far * 10, 100000)
+                    print(f"📷 Camera '{obj.name}' far clip: {old_far} → {camera_data.clip_end}")
+                
+                cameras_adjusted += 1
+        
+        # If no cameras exist, create a default camera with appropriate clip planes
+        if cameras_adjusted == 0:
+            bpy.ops.object.camera_add()
+            camera_obj = bpy.context.active_object
+            camera_obj.name = "BeamNG_Camera"
+            camera_data = camera_obj.data
+            
+            # Set appropriate clip planes for large terrain
+            camera_data.clip_start = 0.1
+            camera_data.clip_end = 100000
+            
+            # Position camera above terrain center
+            camera_obj.location = (0, 0, 1000)
+            camera_obj.rotation_euler = (0, 0, 0)
+            
+            print(f"📷 Created camera '{camera_obj.name}' with clip planes: {camera_data.clip_start} - {camera_data.clip_end}")
+            cameras_adjusted += 1
+        
+        print(f"✅ Adjusted clip planes for {cameras_adjusted} camera(s)")
     
     def import_prefab_objects(self, directory):
         """Import prefab objects from .prefab files"""
