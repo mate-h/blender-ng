@@ -1,7 +1,7 @@
 import bpy
 
 #initialize beamngterrain node group
-def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
+def beamng_terrain_node_group(displacement_image=None, layermap_image=None, material=None):
     node_group = bpy.data.node_groups.new(type = 'GeometryNodeTree', name = "BeamNGTerrain")
 
     node_group.color_tag = 'NONE'
@@ -38,7 +38,7 @@ def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
 
     #Socket Height
     height_socket = node_group.interface.new_socket(name = "Height", in_out='INPUT', socket_type = 'NodeSocketFloat')
-    height_socket.default_value = 200.0
+    height_socket.default_value = 100.0
     height_socket.min_value = -10000.0
     height_socket.max_value = 10000.0
     height_socket.subtype = 'DISTANCE'
@@ -67,29 +67,25 @@ def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
     #Position
     set_position.inputs[2].default_value = (0.0, 0.0, 0.0)
 
-    #node Image Texture (Displacement)
+    #node Image Texture
     image_texture = node_group.nodes.new("GeometryNodeImageTexture")
     image_texture.name = "Image Texture"
     image_texture.extension = 'REPEAT'
     image_texture.interpolation = 'Linear'
-    if displacement_image is not None:
+    if displacement_image:
         image_texture.inputs[0].default_value = displacement_image
-    elif "BeamNG_Terrain_Displacement.exr" in bpy.data.images:
-        image_texture.inputs[0].default_value = bpy.data.images["BeamNG_Terrain_Displacement.exr"]
     #Frame
     image_texture.inputs[2].default_value = 0
 
-    # Add layermap image texture node if layermap is provided
-    layermap_texture_node = None
-    if layermap_image is not None:
-        layermap_texture_node = node_group.nodes.new("GeometryNodeImageTexture")
-        layermap_texture_node.name = "Layermap Texture"
-        layermap_texture_node.extension = 'REPEAT'
-        layermap_texture_node.interpolation = 'Closest'  # Use Closest for material IDs
-        layermap_texture_node.inputs[0].default_value = layermap_image
-        layermap_texture_node.inputs[2].default_value = 0
-        layermap_texture_node.location = (241.1028289794922, -200.0)  # Position below displacement texture
-        layermap_texture_node.width, layermap_texture_node.height = 226.33042907714844, 100.0
+    #node Layermap Texture
+    layermap_texture = node_group.nodes.new("GeometryNodeImageTexture")
+    layermap_texture.name = "Layermap Texture"
+    layermap_texture.extension = 'REPEAT'
+    layermap_texture.interpolation = 'Closest'
+    if layermap_image:
+        layermap_texture.inputs[0].default_value = layermap_image
+    #Frame
+    layermap_texture.inputs[2].default_value = 0
 
     #node Combine XYZ
     combine_xyz = node_group.nodes.new("ShaderNodeCombineXYZ")
@@ -122,20 +118,64 @@ def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
     #Value_001
     math_001.inputs[1].default_value = 1.0
 
+    #node Store Layermap Attribute
+    store_layermap_attribute = node_group.nodes.new("GeometryNodeStoreNamedAttribute")
+    store_layermap_attribute.name = "Store Layermap Attribute"
+    store_layermap_attribute.data_type = 'FLOAT'
+    store_layermap_attribute.domain = 'POINT'
+    #Selection
+    store_layermap_attribute.inputs[1].default_value = True
+    #Name
+    store_layermap_attribute.inputs[2].default_value = "material_layer"
 
+    #node Set Material
+    set_material = node_group.nodes.new("GeometryNodeSetMaterial")
+    set_material.name = "Set Material"
+    #Selection
+    set_material.inputs[1].default_value = True
+    if material:
+        set_material.inputs[2].default_value = material
 
+    #node Named Attribute
+    named_attribute = node_group.nodes.new("GeometryNodeInputNamedAttribute")
+    named_attribute.name = "Named Attribute"
+    named_attribute.data_type = 'FLOAT'
+    #Name
+    named_attribute.inputs[0].default_value = "material_layer"
 
+    #node Compare
+    compare = node_group.nodes.new("FunctionNodeCompare")
+    compare.name = "Compare"
+    compare.data_type = 'FLOAT'
+    compare.mode = 'ELEMENT'
+    compare.operation = 'EQUAL'
+    #B
+    compare.inputs[1].default_value = 255.0
+    #Epsilon
+    compare.inputs[12].default_value = 0.0010000000474974513
+
+    #node Delete Geometry
+    delete_geometry = node_group.nodes.new("GeometryNodeDeleteGeometry")
+    delete_geometry.name = "Delete Geometry"
+    delete_geometry.domain = 'POINT'
+    delete_geometry.mode = 'ALL'
 
     #Set locations
-    group_input.location = (-340.3531188964844, 16.491615295410156)
-    group_output.location = (1227.301513671875, -26.20293426513672)
-    grid.location = (52.136192321777344, 105.69392395019531)
-    set_position.location = (866.7385864257812, 20.970867156982422)
-    image_texture.location = (241.1028289794922, 3.6049652099609375)
-    combine_xyz.location = (688.0914916992188, -124.15180969238281)
-    math.location = (515.56787109375, -115.84983825683594)
-    set_shade_smooth.location = (1046.9998779296875, 8.62431812286377)
-    math_001.location = (-117.55870819091797, -41.91471862792969)
+    group_input.location = (-445.481689453125, 60.36219787597656)
+    group_output.location = (1892.5400390625, 6.232963562011719)
+    grid.location = (-52.99237060546875, 149.56451416015625)
+    set_position.location = (932.610107421875, 64.8414535522461)
+    image_texture.location = (190.7024688720703, 68.13237762451172)
+    layermap_texture.location = (172.66714477539062, -171.87030029296875)
+    combine_xyz.location = (677.2738647460938, -46.79128646850586)
+    math.location = (504.750244140625, -38.489315032958984)
+    set_shade_smooth.location = (1547.3326416015625, -3.284168243408203)
+    math_001.location = (-222.68728637695312, 1.9558639526367188)
+    store_layermap_attribute.location = (1149.5255126953125, -3.6112027168273926)
+    set_material.location = (1727.4613037109375, -1.7147369384765625)
+    named_attribute.location = (933.9366455078125, -234.52467346191406)
+    compare.location = (1142.8494873046875, -224.31651306152344)
+    delete_geometry.location = (1347.490966796875, -54.790870666503906)
 
     #Set dimensions
     group_input.width, group_input.height = 140.0, 100.0
@@ -143,24 +183,26 @@ def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
     grid.width, grid.height = 140.0, 100.0
     set_position.width, set_position.height = 140.0, 100.0
     image_texture.width, image_texture.height = 226.33042907714844, 100.0
+    layermap_texture.width, layermap_texture.height = 226.33042907714844, 100.0
     combine_xyz.width, combine_xyz.height = 140.0, 100.0
     math.width, math.height = 140.0, 100.0
     set_shade_smooth.width, set_shade_smooth.height = 140.0, 100.0
     math_001.width, math_001.height = 140.0, 100.0
+    store_layermap_attribute.width, store_layermap_attribute.height = 140.0, 100.0
+    set_material.width, set_material.height = 140.0, 100.0
+    named_attribute.width, named_attribute.height = 140.0, 100.0
+    compare.width, compare.height = 140.0, 100.0
+    delete_geometry.width, delete_geometry.height = 140.0, 100.0
 
     #initialize beamngterrain links
-    #set_shade_smooth.Geometry -> group_output.Geometry
-    node_group.links.new(set_shade_smooth.outputs[0], group_output.inputs[0])
+    #set_material.Geometry -> group_output.Geometry
+    node_group.links.new(set_material.outputs[0], group_output.inputs[0])
     #grid.Mesh -> set_position.Geometry
     node_group.links.new(grid.outputs[0], set_position.inputs[0])
     #combine_xyz.Vector -> set_position.Offset
     node_group.links.new(combine_xyz.outputs[0], set_position.inputs[3])
     #math.Value -> combine_xyz.Z
     node_group.links.new(math.outputs[0], combine_xyz.inputs[2])
-    #set_position.Geometry -> set_shade_smooth.Geometry
-    node_group.links.new(set_position.outputs[0], set_shade_smooth.inputs[0])
-    #grid.UV Map -> image_texture.Vector
-    node_group.links.new(grid.outputs[1], image_texture.inputs[1])
     #group_input.Resolution -> math_001.Value
     node_group.links.new(group_input.outputs[2], math_001.inputs[0])
     #math_001.Value -> grid.Vertices X
@@ -175,9 +217,22 @@ def beamng_terrain_node_group(displacement_image=None, layermap_image=None):
     node_group.links.new(image_texture.outputs[0], math.inputs[0])
     #group_input.Height -> math.Value
     node_group.links.new(group_input.outputs[3], math.inputs[1])
-    
-    # Connect layermap texture to UV coordinates if it exists
-    if layermap_texture_node is not None:
-        node_group.links.new(grid.outputs[1], layermap_texture_node.inputs[1])
-    
+    #set_shade_smooth.Geometry -> set_material.Geometry
+    node_group.links.new(set_shade_smooth.outputs[0], set_material.inputs[0])
+    #set_position.Geometry -> store_layermap_attribute.Geometry
+    node_group.links.new(set_position.outputs[0], store_layermap_attribute.inputs[0])
+    #layermap_texture.Color -> store_layermap_attribute.Value
+    node_group.links.new(layermap_texture.outputs[0], store_layermap_attribute.inputs[3])
+    #named_attribute.Attribute -> compare.A
+    node_group.links.new(named_attribute.outputs[0], compare.inputs[0])
+    #grid.UV Map -> image_texture.Vector
+    node_group.links.new(grid.outputs[1], image_texture.inputs[1])
+    #grid.UV Map -> layermap_texture.Vector
+    node_group.links.new(grid.outputs[1], layermap_texture.inputs[1])
+    #compare.Result -> delete_geometry.Selection
+    node_group.links.new(compare.outputs[0], delete_geometry.inputs[1])
+    #store_layermap_attribute.Geometry -> delete_geometry.Geometry
+    node_group.links.new(store_layermap_attribute.outputs[0], delete_geometry.inputs[0])
+    #delete_geometry.Geometry -> set_shade_smooth.Geometry
+    node_group.links.new(delete_geometry.outputs[0], set_shade_smooth.inputs[0])
     return node_group

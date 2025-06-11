@@ -249,18 +249,12 @@ def main():
     heightmap = terrain_data['heightmap']
     stats = parser.get_terrain_stats(heightmap)
     
-    print("\n🎉 FIXED TERRAIN STATS (Offset 5, Little-Endian):")
+    print("\n🎉 TERRAIN STATS (Offset 5, Little-Endian):")
     print(f"   Shape: {stats['shape']}")
     print(f"   Height range: {stats['min_height']} - {stats['max_height']}")
     print(f"   Mean height: {stats['mean_height']:.1f}")
     print(f"   Unique values: {stats['unique_values']:,}")
     print(f"   Water area: {stats['zero_percentage']:.1f}%")
-    
-    print("\n✅ SUCCESS: Critical format issues FIXED!")
-    print("   - Offset corrected: 2048 → 5")
-    print("   - Endianness corrected: big → little")
-    print("   - Should eliminate banding artifacts")
-    print("   - Ready for Blender import")
 
 if __name__ == "__main__":
     main() 

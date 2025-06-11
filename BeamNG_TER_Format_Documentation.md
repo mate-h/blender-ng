@@ -2,7 +2,12 @@
 
 ## Overview
 
-This document describes the binary format structure for BeamNG.drive `.ter` terrain files, based on reverse engineering analysis of the `small_island.ter` file.
+This document describes the binary format structure for BeamNG.drive `.ter` terrain files, based on reverse engineering analysis and community research from the BeamNG forums.
+
+**Key Sources:**
+- [BeamNG Forum Discussion](https://www.beamng.com/threads/edit-theterrain-ter-files-programatically.85819/)
+- [BeamNG Level Template Creator](https://github.com/Grille/BeamNG_LevelTemplateCreator/blob/main/Grille.BeamNG.Lib/IO/Binary/TerrainV9Serializer.cs)
+- Community reverse engineering efforts
 
 ## File Format Specification
 
@@ -12,143 +17,189 @@ The `.ter` file begins with a 5-byte header:
 
 | Offset | Size | Type | Description |
 |--------|------|------|-------------|
-| 0x00   | 1    | char | Format version number |
+| 0x00   | 1    | char | Format version number (typically 9) |
 | 0x01   | 4    | uint32 (little-endian) | Terrain dimensions (size × size) |
 
 ### Data Layout
 
-After the header, there's padding until offset 0x100 (256 bytes), where the actual terrain data begins:
+**CORRECTED**: Data starts immediately after the header at offset 0x05 (not 0x100):
 
 ```
 Offset 0x000: [Header - 5 bytes]
-Offset 0x005: [Padding - 251 bytes of zeros]
-Offset 0x100: [Heightmap Data - 2,097,152 bytes]
-Offset 0x200100: [Layer Map Data - ~1,048,441 bytes*]
-Offset 0x300000+: [Texture Map Data - variable*]
-Offset EOF: [Material Names - null-terminated strings*]
+Offset 0x005: [Heightmap Data - size×size×2 bytes]
+Offset 0x005+heightmap: [Layer Map Data - size×size×1 byte]
+Offset varies: [Layer Texture Map - size×size×1 byte]
+Offset varies: [Additional Coverage Maps - 4×(size×size×1 byte)]
+Offset varies: [Material Count - 4 bytes (int32)]
+Offset varies: [Material Names - variable length strings]
 ```
-
-**Note**: The layer map and texture map sections appear to be shorter than expected based on the JSON specification, suggesting the format may vary or contain additional compression/optimization.
 
 ## Data Sections
 
 ### 1. Heightmap Data
 
-- **Size**: 2,097,152 bytes (1024 × 1024 × 2 bytes)
-- **Format**: 16-bit unsigned integers, little-endian
+- **Offset**: Immediately after header (0x05)
+- **Size**: size × size × 2 bytes (e.g., 1024×1024×2 = 2,097,152 bytes)
+- **Format**: 16-bit unsigned integers, **little-endian**
 - **Purpose**: Stores elevation data for terrain mesh generation
+- **Range**: 0x0000 (lowest) to 0xFFFF (highest)
 
-**Analyzed Values for small_island.ter**:
-- Height range: 0 - 65,531 (16-bit range)
-- Mean height: 33,064.62
-- Standard deviation: 18,882.54
-- Unique height values: 52,919 out of 1,048,576 possible
+**Height Value Interpretation**:
+- `0x0000` = Lowest terrain point
+- `0xFFFF` = Highest terrain point  
+- Height scaling is applied in the game engine based on terrain settings
 
-**Coordinate System**:
-- Array index `[y][x]` where `y` is row (north-south) and `x` is column (east-west)
-- Height values likely represent elevation in BeamNG units (meters)
+### 2. Layer Map Data (Material Assignment)
 
-### 2. Layer Map Data
-
-- **Expected Size**: 1,048,576 bytes (1024 × 1024 × 1 byte)
-- **Actual Size**: ~1,048,441 bytes (135 bytes short)
+- **Offset**: After heightmap data
+- **Size**: size × size × 1 byte
 - **Format**: 8-bit unsigned integers
-- **Purpose**: Maps each terrain pixel to a material ID from the materials list
+- **Purpose**: Maps each terrain pixel to a material ID
 
-### 3. Texture Map Data
+**Special Values**:
+- `0x00` = First material in materials list
+- `0x01` = Second material in materials list
+- `...`
+- **`0xFF` (255) = HOLE in terrain** 🔥
 
-- **Expected Size**: 1,048,576 bytes (1024 × 1024 × 1 byte)  
-- **Actual Size**: 0 bytes (not present in small_island.ter)
+### 3. Layer Texture Map
+
+- **Offset**: After layer map
+- **Size**: size × size × 1 byte
 - **Format**: 8-bit unsigned integers
-- **Purpose**: Texture blending weights or additional material information
+- **Purpose**: Texture blending weights or secondary material information
 
-### 4. Material Names
+### 4. Additional Coverage Maps
 
-- **Format**: Null-terminated ASCII strings
-- **Location**: End of file
-- **Status**: Not present in small_island.ter (uses JSON material list instead)
+According to reverse engineering, there are **4 additional coverage maps** after the layer texture map:
+
+- **Count**: 4 separate maps
+- **Size**: size × size × 1 byte each
+- **Purpose**: Unknown, possibly related to:
+  - Vegetation coverage
+  - Detail object placement (flowers, rocks, etc.)
+  - Ambient occlusion or lighting data
+  - Terrain detail masks
+
+### 5. Material Count and Names
+
+- **Material Count**: 4 bytes (int32, little-endian)
+- **Material Names**: Variable-length strings with length prefixes
+  - Each string is prefixed by its length (1 byte)
+  - Strings are null-terminated ASCII
+  - Example: `[0x05]"Grass"[0x00][0x04]"Rock"[0x00]`
+
+## Terrain Holes Detection
+
+**Critical Finding**: Terrain holes are created by setting the layer map value to `0xFF` (255).
+
+```python
+def detect_holes(layermap):
+    """Detect holes in BeamNG terrain"""
+    hole_mask = layermap == 255
+    hole_positions = np.where(hole_mask)
+    return hole_mask, hole_positions
+```
 
 ## Configuration File (.terrain.json)
 
-Each `.ter` file has an accompanying `.terrain.json` file that provides metadata:
+The JSON file provides metadata and format description:
 
 ```json
 {
-  "binaryFormat": "version(char), size(unsigned int), heightMap(...), layerMap(...), layerTextureMap(...), materialNames",
+  "binaryFormat": "version(char), size(unsigned int), heightMap(heightMapSize * heightMapItemSize), layerMap(layerMapSize * layerMapItemSize), layerTextureMap(layerMapSize * layerMapItemSize), materialNames",
   "datafile": "/levels/small_island/small_island.ter",
   "heightMapItemSize": 2,
   "heightMapSize": 1048576,
   "layerMapItemSize": 1,
   "layerMapSize": 1048576,
-  "materials": ["Grass", "dirt_grass", "BeachSand", ...],
+  "materials": ["Grass", "dirt_grass", "BeachSand", "rock_desert"],
   "size": 1024,
   "version": 9
 }
 ```
 
-## Coordinate System and Scaling
+## Key Corrections from Original Analysis
 
-- **Grid Size**: 1024 × 1024 heightmap points
-- **World Coordinates**: Each heightmap point represents a specific world coordinate
-- **Height Scaling**: 16-bit values likely map to world elevation units
-- **Material Resolution**: Same resolution as heightmap (1:1 mapping)
+### ❌ Previous Incorrect Information:
+- Data starts at offset 0x100 (256 bytes)
+- 251 bytes of padding after header
+- Big-endian encoding for heightmap
+- No information about terrain holes
 
-## Implementation Notes for Blender Import
+### ✅ Corrected Information:
+- Data starts at offset 0x05 (immediately after header)
+- No padding between header and data
+- Little-endian encoding for all data
+- Layer map value 0xFF (255) creates terrain holes
+- Additional coverage maps present
 
-### Heightmap to Mesh Conversion
+## Implementation Notes
 
-1. **Read heightmap data** as 1024×1024 array of 16-bit values
-2. **Create mesh vertices** at regular intervals based on world scale
-3. **Set Z-coordinates** from heightmap values (may need scaling factor)
-4. **Generate faces** using standard grid tessellation
+### Reading Terrain Data
 
-### Material Assignment
+```python
+def read_beamng_terrain(ter_file, json_config):
+    with open(ter_file, 'rb') as f:
+        # Read header
+        version = struct.unpack('B', f.read(1))[0]
+        size = struct.unpack('<I', f.read(4))[0]  # Little-endian
+        
+        # Read heightmap (little-endian)
+        heightmap_bytes = size * size * 2
+        heightmap_data = f.read(heightmap_bytes)
+        heights = struct.unpack(f'<{len(heightmap_data)//2}H', heightmap_data)
+        heightmap = np.array(heights).reshape((size, size))
+        
+        # Read layer map
+        layermap_data = f.read(size * size)
+        layermap = np.array(struct.unpack(f'{size*size}B', layermap_data)).reshape((size, size))
+        
+        # Detect holes
+        holes = layermap == 255
+        
+        return heightmap, layermap, holes
+```
 
-1. **Read layer map** to get material ID per vertex/face
-2. **Map material IDs** to material names from JSON config
-3. **Create Blender materials** for each unique material
-4. **Assign face materials** based on layer map data
+### Hole Processing for Blender
 
-### Terrain Scaling
+```python
+def process_terrain_holes(heightmap, layermap):
+    """Process terrain holes for Blender mesh generation"""
+    hole_mask = layermap == 255
+    
+    # Option 1: Set hole areas to minimum height
+    processed_heightmap = heightmap.copy()
+    processed_heightmap[hole_mask] = 0
+    
+    # Option 2: Create separate hole geometry
+    hole_positions = np.where(hole_mask)
+    
+    return processed_heightmap, hole_positions
+```
 
-The relationship between heightmap values and world coordinates needs to be determined:
-- Test with known BeamNG level dimensions
-- Compare with other level files for scaling patterns
-- Check for scale factors in other BeamNG configuration files
+## File Format Summary
 
-## File Format Variations
+Based on community reverse engineering:
 
-Based on analysis, the actual `.ter` format may vary from the JSON specification:
+1. **Header**: Version (1 byte) + Size (4 bytes, little-endian)
+2. **Heightmap**: 16-bit little-endian height values
+3. **Layer Map**: 8-bit material IDs (255 = hole)
+4. **Layer Texture Map**: 8-bit texture blending data
+5. **Coverage Maps**: 4× additional coverage data layers
+6. **Materials**: Count + length-prefixed strings
 
-1. **Padding**: 251 bytes of padding between header and data
-2. **Shortened sections**: Layer map shorter than expected
-3. **Missing sections**: Texture map and material names not present
-4. **Alternative storage**: Materials defined in JSON instead of binary
+## References
 
-## Next Steps for Implementation
+- [BeamNG Forum: Edit theTerrain.ter files programatically?](https://www.beamng.com/threads/edit-theterrain-ter-files-programatically.85819/)
+- [BeamNG Level Template Creator Repository](https://github.com/Grille/BeamNG_LevelTemplateCreator/)
+- Community contributions from emlodnaor, unyxium, and others
 
-1. **Create Python parser** based on this specification
-2. **Test with multiple terrain files** to validate format consistency  
-3. **Implement Blender mesh generation** from heightmap data
-4. **Add material system** using layer map and JSON configuration
-5. **Handle file format variations** and error cases
+## Version History
 
-## Analysis Tools
-
-The analysis was performed using:
-- `ter_format_analyzer.py`: Python script for binary analysis
-- `hexdump`: For examining raw binary structure
-- `numpy`: For statistical analysis of heightmap data
-
-## File Size Analysis
-
-**small_island.ter breakdown**:
-- Total file size: 3,145,849 bytes
-- Header: 5 bytes
-- Padding: 251 bytes  
-- Heightmap: 2,097,152 bytes (exact)
-- Layer map: ~1,048,441 bytes (135 bytes short)
-- Texture map: 0 bytes (missing)
-- Material names: 0 bytes (in JSON instead)
-
-This suggests the format may be optimized or compressed in ways not described by the JSON specification string. 
+- **v1.0**: Initial analysis with incorrect offset assumptions
+- **v2.0**: Corrected format based on community research
+  - Fixed data offset: 0x100 → 0x05
+  - Fixed endianness: big → little
+  - Added hole detection: layer map value 255
+  - Added coverage maps documentation 

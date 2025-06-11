@@ -342,8 +342,14 @@ class ImportBeamNGLevel(Operator, ImportHelper):
     def create_displacement_texture(self, heightmap):
         """Create a 16-bit EXR texture for displacement mapping"""
         
-        # Normalize heightmap to 0-1 range for displacement
+        print("🏔️  Converting heightmap to texture...")
+        print(f"   Input shape: {heightmap.shape}")
+        print(f"   Value range: {heightmap.min()} - {heightmap.max()}")
+        
+        # Normalize heightmap to 0-1 range for displacement (matching npy_to_exr.py)
         heightmap_normalized = heightmap.astype(np.float32) / 65535.0
+        
+        print(f"   Normalized range: {heightmap_normalized.min():.1f} - {heightmap_normalized.max():.1f}")
         
         # Create Blender image
         image_name = "BeamNG_Terrain_Displacement.exr"
@@ -374,15 +380,23 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         
         # Update image
         displacement_image.update()
+        displacement_image.pack()
         
         # Save as EXR file
         displacement_image.file_format = 'OPEN_EXR'
         
         print(f"✅ Created displacement texture: {image_name} ({width}x{height})")
+        print(f"   Size: {width}x{height}")
+        print(f"   Value range: {heightmap_normalized.min():.1f} - {heightmap_normalized.max():.1f}")
         return displacement_image
     
     def create_layermap_texture(self, layermap, materials):
         """Create a texture for the layermap (material indices)"""
+        
+        print("🎨 Converting layermap to texture...")
+        print(f"   Input shape: {layermap.shape}")
+        print(f"   Value range: {layermap.min()} - {layermap.max()}")
+        print(f"   Unique materials: {len(np.unique(layermap))}")
         
         # Create Blender image
         image_name = "BeamNG_Terrain_Layermap"
@@ -398,32 +412,49 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             width=width,
             height=height,
             alpha=False,
-            float_buffer=False  # Use 8-bit for material indices
+            float_buffer=True  # Use float buffer for better precision
         )
         
-        # Normalize layermap to 0-1 range for material IDs
-        # Convert material indices to normalized values (0-1)
-        max_material_id = len(materials) - 1 if materials else 255
-        layermap_normalized = layermap.astype(np.float32) / max_material_id
+        # DO NOT normalize layermap - keep raw material ID values (matching npy_to_exr.py)
+        layermap_normalized = layermap.astype(np.float32)
+        if layermap.max() == 0:
+            print("⚠️  WARNING: Layermap is all zeros")
         
-        # Convert layermap to RGBA format for Blender (R=material_id, G=material_id, B=material_id, A=1)
+        # Convert layermap to RGBA format for Blender (R=G=B=material_id, A=1)
         rgba_data = np.zeros((height, width, 4), dtype=np.float32)
         rgba_data[:, :, 0] = layermap_normalized  # Red channel
         rgba_data[:, :, 1] = layermap_normalized  # Green channel  
         rgba_data[:, :, 2] = layermap_normalized  # Blue channel
         rgba_data[:, :, 3] = 1.0  # Alpha channel
         
-        # Flatten for Blender (Blender expects flattened RGBA array)
-        layermap_image.pixels = rgba_data.flatten()
+        # Keep it simple - just flatten the RGBA data directly (like npy_to_exr.py)
+        pixel_data = rgba_data.flatten()
         
-        # Update image
+        # Set pixels to Blender image
+        layermap_image.pixels = pixel_data
+        
+        # Force update and pack the image
         layermap_image.update()
+        layermap_image.pack()
         
         # Set colorspace to Non-Color for data textures
         layermap_image.colorspace_settings.name = 'Non-Color'
         
+        # Save as EXR file
+        layermap_image.file_format = 'OPEN_EXR'
+        
+        # Force another update after format change
+        layermap_image.update()
+                
         print(f"✅ Created layermap texture: {image_name} ({width}x{height})")
-        print(f"   Materials: {len(materials)} ({max_material_id} max ID)")
+        
+        # Print material mapping (like in npy_to_exr.py)
+        unique_values = np.unique(layermap)
+        print("   Material mapping:")
+        for mat_id in unique_values[:10]:  # Show first 10
+            if mat_id < len(materials):
+                material_name = materials[mat_id]
+                print(f"     ID {mat_id} → {material_name}")
         
         return layermap_image
     
