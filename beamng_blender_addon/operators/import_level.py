@@ -29,6 +29,7 @@ class BeamNGTerrainParser:
     def __init__(self, ter_file: str, json_file: str):
         self.ter_file = Path(ter_file)
         self.json_file = Path(json_file)
+        self.level_directory = self.ter_file.parent
         
         # Load JSON configuration
         with open(self.json_file, 'r') as f:
@@ -43,11 +44,77 @@ class BeamNGTerrainParser:
         self.layermap_item_size = self.config['layerMapItemSize']
         self.materials = self.config['materials']
         
+        # 🆕 Detect height scale from terrain preset files
+        self.height_scale = self.detect_height_scale()
+        self.terrain_position = self.detect_terrain_position()
+        
         print("🏞️  BeamNG Terrain Parser")
         print(f"📁 Terrain: {self.ter_file.name}")
         print(f"📊 Dimensions: {self.size}x{self.size}")
         print(f"🎭 Materials: {len(self.materials)}")
+        print(f"⛰️  Height Scale: {self.height_scale}")
+        if self.terrain_position:
+            print(f"📍 Position: {self.terrain_position}")
         print("✅ Using offset 5 (after header), all data: little-endian")
+    
+    def detect_height_scale(self):
+        """Detect height scale from terrain preset files - Task 0.2.2"""
+        try:
+            # Look for terrain preset files in level directory
+            # Pattern: *terrainPreset.json or *TerrainPreset.json
+            preset_files = []
+            for pattern in ['*terrainPreset.json', '*TerrainPreset.json', '*terrainpreset.json']:
+                preset_files.extend(self.level_directory.glob(pattern))
+            
+            if not preset_files:
+                print("⚠️  No terrain preset files found, using default height scale: 200")
+                return 200.0  # Default fallback
+            
+            # Use the first preset file found
+            preset_file = preset_files[0]
+            print(f"📄 Found terrain preset: {preset_file.name}")
+            
+            with open(preset_file, 'r') as f:
+                preset_data = json.load(f)
+            
+            height_scale = preset_data.get('heightScale', 200.0)
+            print(f"✅ Detected height scale: {height_scale}")
+            return float(height_scale)
+            
+        except Exception as e:
+            print(f"❌ Error detecting height scale: {e}")
+            print("⚠️  Using default height scale: 200")
+            return 200.0
+    
+    def detect_terrain_position(self):
+        """Detect terrain position from terrain preset files"""
+        try:
+            # Look for terrain preset files
+            preset_files = []
+            for pattern in ['*terrainPreset.json', '*TerrainPreset.json', '*terrainpreset.json']:
+                preset_files.extend(self.level_directory.glob(pattern))
+            
+            if not preset_files:
+                return None
+            
+            preset_file = preset_files[0]
+            with open(preset_file, 'r') as f:
+                preset_data = json.load(f)
+            
+            pos_data = preset_data.get('pos', {})
+            if pos_data:
+                position = {
+                    'x': pos_data.get('x', 0),
+                    'y': pos_data.get('y', 0), 
+                    'z': pos_data.get('z', 0)
+                }
+                print(f"✅ Detected terrain position: {position}")
+                return position
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error detecting terrain position: {e}")
+            return None
     
     def parse_terrain(self):
         """Parse the terrain file using CORRECTED offset and encoding"""
@@ -150,7 +217,9 @@ class BeamNGTerrainParser:
                 'heightmap': heightmap,
                 'layermap': layermap,
                 'materials': self.materials,
-                'config': self.config
+                'config': self.config,
+                'height_scale': self.height_scale,  # 🆕 Auto-detected height scale
+                'terrain_position': self.terrain_position  # 🆕 Auto-detected position
             }
     
     def get_terrain_stats(self, heightmap: np.ndarray):
@@ -326,11 +395,17 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             # Create terrain mesh with BeamNG node group
             self.report({'INFO'}, "Creating terrain mesh with BeamNG node group...")
             terrain_obj = self.create_terrain_with_node_group(
-                displacement_texture, layermap_texture, terrain_data['config']
+                displacement_texture, layermap_texture, terrain_data
             )
             
             # Adjust camera clip planes for large terrain
             self.adjust_camera_clip_planes()
+            
+            # Adjust 3D viewport clip planes as requested
+            self.adjust_viewport_clip_planes()
+            
+            # Frame the imported terrain in view
+            self.frame_imported_terrain(terrain_obj)
             
             self.report({'INFO'}, f"Terrain imported successfully: {terrain_obj.name}")
             return {'FINISHED'}
@@ -458,21 +533,60 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         
         return layermap_image
     
-    def create_terrain_with_node_group(self, displacement_texture, layermap_texture, config):
-        """Create terrain mesh using BeamNG geometry node group"""
+    def create_terrain_with_node_group(self, displacement_texture, layermap_texture, terrain_data):
+        """Create terrain mesh using BeamNG geometry node group with auto-detected settings"""
         
         # Get terrain dimensions and settings
+        config = terrain_data['config']
         terrain_size = config['size']
         world_scale = getattr(bpy.context.scene, 'beamng_terrain_scale', self.terrain_scale)
-        displacement_strength = getattr(bpy.context.scene, 'beamng_displacement_strength', self.displacement_strength)
+        
+        # 🆕 Use auto-detected height scale instead of hardcoded displacement strength
+        auto_height_scale = terrain_data.get('height_scale', self.displacement_strength)
+        displacement_strength = getattr(bpy.context.scene, 'beamng_displacement_strength', auto_height_scale)
+        
+        # Apply terrain position offset if detected
+        terrain_position = terrain_data.get('terrain_position', None)
+
+        print(f"🆕 Would use the following terrain position: {terrain_position}")
+        
+        # Calculate resolution early for use in node group
+        heightmap_resolution = config.get('heightMapSize', 1024)
+        # Calculate resolution as square root since heightMapSize is total pixels
+        vertex_resolution = int(np.sqrt(heightmap_resolution))
         
         # Create base plane mesh
         bpy.ops.mesh.primitive_plane_add(size=1.0)  # Unit size, will be scaled by node group
         terrain_obj = bpy.context.active_object
         terrain_obj.name = "BeamNG_Terrain"
         
-        # Create or get the BeamNG terrain node group
-        node_group = beamng_terrain_node_group(displacement_texture, layermap_texture)
+        # Prepare terrain position (convert to tuple if available)
+        terrain_pos = (0.0, 0.0, 0.0)
+        if terrain_position:
+            terrain_pos = (
+                terrain_position.get('x', 0.0),
+                terrain_position.get('y', 0.0),
+                terrain_position.get('z', 0.0)
+            )
+        
+        # Create or get basic material for the terrain (placeholder)
+        material_name = "BeamNG_Terrain_Material"
+        if material_name not in bpy.data.materials:
+            terrain_material = bpy.data.materials.new(name=material_name)
+            terrain_material.use_nodes = True
+        else:
+            terrain_material = bpy.data.materials[material_name]
+        
+        # Create or get the BeamNG terrain node group with all parameters
+        node_group = beamng_terrain_node_group(
+            displacement_image=displacement_texture,
+            layermap_image=layermap_texture,
+            material=terrain_material,
+            position=terrain_pos,
+            size=terrain_size * world_scale,
+            resolution=vertex_resolution,
+            height=displacement_strength
+        )
         
         # Add geometry nodes modifier
         geo_nodes_mod = terrain_obj.modifiers.new(name="BeamNG_Terrain", type='NODES')
@@ -482,10 +596,7 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         # Size (terrain dimensions in world units)
         geo_nodes_mod["Input_2"] = terrain_size * world_scale
         
-        # Resolution (number of vertices per axis, calculated from heightmap)
-        heightmap_resolution = config.get('heightMapSize', 1024)
-        # Calculate resolution as square root since heightMapSize is total pixels
-        vertex_resolution = int(np.sqrt(heightmap_resolution))
+        # Resolution (number of vertices per axis)
         geo_nodes_mod["Input_3"] = vertex_resolution
         
         # Height (displacement strength)
@@ -543,6 +654,70 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             cameras_adjusted += 1
         
         print(f"✅ Adjusted clip planes for {cameras_adjusted} camera(s)")
+    
+    def adjust_viewport_clip_planes(self):
+        """Adjust 3D viewport clip planes for large terrain viewing"""
+        
+        # Iterate through all 3D viewports in all areas and screens
+        viewports_adjusted = 0
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    for space in area.spaces:
+                        if space.type == 'VIEW_3D':
+                            old_near = space.clip_start
+                            old_far = space.clip_end
+                            
+                            # Set viewport clip planes as requested
+                            space.clip_start = 0.1  # 0.1 meters
+                            space.clip_end = 10000  # 10000 meters
+                            
+                            print(f"🖥️  Viewport clip planes: {old_near} - {old_far} → {space.clip_start} - {space.clip_end}")
+                            viewports_adjusted += 1
+        
+        if viewports_adjusted == 0:
+            print("⚠️  No 3D viewports found to adjust")
+        else:
+            print(f"✅ Adjusted clip planes for {viewports_adjusted} 3D viewport(s)")
+    
+    def frame_imported_terrain(self, terrain_obj):
+        """Frame the imported terrain in the 3D viewport"""
+        
+        try:
+            # Ensure the terrain object is selected and active
+            bpy.ops.object.select_all(action='DESELECT')
+            terrain_obj.select_set(True)
+            bpy.context.view_layer.objects.active = terrain_obj
+            
+            # Frame the selected terrain object in all 3D viewports
+            # Use override context to ensure it works across all viewports
+            for screen in bpy.data.screens:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        for region in area.regions:
+                            if region.type == 'WINDOW':
+                                # Override context for this specific viewport
+                                override_context = {
+                                    'screen': screen,
+                                    'area': area,
+                                    'region': region,
+                                    'scene': bpy.context.scene,
+                                    'view_layer': bpy.context.view_layer,
+                                    'active_object': terrain_obj,
+                                    'selected_objects': [terrain_obj]
+                                }
+                                
+                                # Frame the selected object in this viewport
+                                with bpy.context.temp_override(**override_context):
+                                    bpy.ops.view3d.view_selected()
+                                
+                                print(f"🎯 Framed terrain in viewport")
+                                break
+            
+            print(f"✅ Framed terrain '{terrain_obj.name}' in view")
+            
+        except Exception as e:
+            print(f"⚠️  Could not frame terrain in view: {e}")
     
     def import_prefab_objects(self, directory):
         """Import prefab objects from .prefab files"""
