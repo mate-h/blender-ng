@@ -279,31 +279,6 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         default=False,
     )
     
-    # Terrain displacement options
-    terrain_scale: bpy.props.FloatProperty(
-        name="Terrain Scale",
-        description="Scale factor for terrain size",
-        default=1.0,
-        min=0.1,
-        max=10.0,
-    )
-    
-    displacement_strength: bpy.props.FloatProperty(
-        name="Displacement Strength",
-        description="Strength of displacement effect",
-        default=200.0,
-        min=1.0,
-        max=1000.0,
-    )
-    
-    subdivision_levels: bpy.props.IntProperty(
-        name="Subdivision Levels",
-        description="Number of subdivision levels for terrain detail",
-        default=6,
-        min=2,
-        max=10,
-    )
-    
     def execute(self, context):
         """Execute the import operation"""
         try:
@@ -543,11 +518,9 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         # Get terrain dimensions and settings
         config = terrain_data['config']
         terrain_size = config['size']
-        world_scale = getattr(bpy.context.scene, 'beamng_terrain_scale', self.terrain_scale)
         
         # 🆕 Use auto-detected height scale instead of hardcoded displacement strength
-        auto_height_scale = terrain_data.get('height_scale', self.displacement_strength)
-        displacement_strength = getattr(bpy.context.scene, 'beamng_displacement_strength', auto_height_scale)
+        displacement_strength =  terrain_data['height_scale']
         
         # Apply terrain position offset if detected
         terrain_position = terrain_data.get('terrain_position', None)
@@ -637,7 +610,7 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             layermap_image=layermap_texture,
             material=terrain_material,
             position=terrain_pos,
-            size=terrain_size * world_scale,
+            size=terrain_size,
             resolution=vertex_resolution,
             height=displacement_strength
         )
@@ -648,7 +621,7 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         
         # Set node group parameters
         # Size (terrain dimensions in world units)
-        geo_nodes_mod["Input_2"] = terrain_size * world_scale
+        geo_nodes_mod["Input_2"] = terrain_size
         
         # Resolution (number of vertices per axis)
         geo_nodes_mod["Input_3"] = vertex_resolution
@@ -657,7 +630,7 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         geo_nodes_mod["Input_4"] = displacement_strength
         
         print(f"✅ Created terrain mesh with BeamNG node group: {terrain_obj.name}")
-        print(f"   Size: {terrain_size * world_scale} units")
+        print(f"   Size: {terrain_size} units")
         print(f"   Resolution: {vertex_resolution}x{vertex_resolution}")
         print(f"   Height: {displacement_strength}")
         

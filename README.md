@@ -6,11 +6,10 @@ A comprehensive Blender addon for importing and exporting BeamNG.drive level dat
 
 ## 🌟 Features
 
-### ✅ **Current (Phase 2)**
+### ✅ **Current**
 - **🏞️ EXR Terrain Import** - Import BeamNG `.ter` terrain files as 16-bit EXR displacement textures
 - **⚡ Real-time Preview** - Live viewport displacement preview with subdivision surfaces  
-- **🎛️ Configurable Parameters** - Adjustable terrain scale, displacement strength, and subdivision levels
-- **🔧 Non-destructive Workflow** - Displacement-based approach preserves original heightmap data
+- **🔧 Non-destructive Workflow** - Geometry nodes based displacement approach preserves original heightmap data
 - **📁 Level Detection** - Automatic BeamNG level directory validation
 - **🎨 Material System** - Automated terrain material setup with proper displacement nodes
 
@@ -47,21 +46,13 @@ chmod +x quick_install.sh
 ### EXR Terrain Import Workflow
 
 1. **Open Import Dialog**
-   - Go to `File > Import > BeamNG Level`
-   - Navigate to your BeamNG level directory (contains `.ter` and `.terrain.json`)
+   - Open Tools panel (T)
+   - Click "BeamNG" tab
+   - Browse to your BeamNG level directory (contains `.ter` and `.terrain.json`)
 
-2. **Configure Terrain Settings** (in BeamNG panel)
-   - **Terrain Scale**: Overall size multiplier (default: 1.0)
-   - **Displacement Strength**: Height variation intensity (try 50-200 for realistic results)
-   - **Subdivision Levels**: Detail level (6+ recommended, 8+ for high detail)
-
-3. **Import Terrain**
-   - Enable "Import Terrain" option
-   - Click "Import BeamNG Level"
-
-4. **Optimize Viewport** (for performance)
-   - Switch to "Material Preview" or "Rendered" viewport shading
-   - Lower subdivision levels for initial testing
+2. **Import Terrain**
+   - Enable "Import Level" option
+   - Click the "Import BeamNG Level" button
 
 ### Expected Results
 - Creates `BeamNG_Terrain` object with subdivision surface modifier

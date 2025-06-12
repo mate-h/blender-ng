@@ -215,7 +215,7 @@ def terrain_material_node_group(material_name="Terrain_Material", texture_ao_pat
     terrain_material.links.new(attribute.outputs[1], image_texture_002.inputs[0])
     #principled_bsdf.BSDF -> material_output.Surface
     terrain_material.links.new(principled_bsdf.outputs[0], material_output.inputs[0])
-    
+
     return mat
 
 # Remove the global creation call since we now create it inside the function
