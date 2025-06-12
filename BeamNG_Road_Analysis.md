@@ -9,9 +9,25 @@ This document analyzes the BeamNG road data structure found in level files and o
 BeamNG's road system consists of multiple layers:
 
 1. **Base Terrain Mesh**: Smooth collision surface with roads "carved out"
-2. **DecalRoad Objects**: Visual road surfaces rendered as decals (no collision)
-3. **Road Architect**: World Editor tool for creating roads with edit/render modes
-4. **DecalRoad Editor**: Tool for managing road decal properties
+2. **Terrain Base Textures**: Standardized texture set for terrain materials (built-in levels)
+3. **DecalRoad Objects**: Visual road surfaces rendered as decals (no collision)
+4. **Road Architect**: World Editor tool for creating roads with edit/render modes
+5. **DecalRoad Editor**: Tool for managing road decal properties
+
+### Terrain Base Texture System
+Built-in BeamNG levels use a standardized terrain texture naming convention:
+
+- `t_terrain_base_ao.png` - Ambient Occlusion map
+- `t_terrain_base_b.png` - Base Color/Albedo map  
+- `t_terrain_base_h.png` - Height/Displacement map
+- `t_terrain_base_nm.png` - Normal map
+- `t_terrain_base_r.png` - Roughness/Material properties map
+
+**Key Findings:**
+- **Built-in Levels**: Have access to these standardized terrain base textures
+- **User-Created Maps**: May not have access to this texture set in the editor
+- **Naming Convention**: Follows PBR material standard (ao, albedo, height, normal, roughness)
+- **Engine Integration**: Likely hardcoded naming scheme expected by BeamNG engine
 
 ### Road Creation Workflow
 Roads in BeamNG are created using the [Road Architect](https://documentation.beamng.com/world_editor/tools/road_architect/disk_options/) in the World Editor, which has:
@@ -321,6 +337,8 @@ Our BeamNG road import could complement the existing addon by:
 8. **Collision Mesh Import**: Import the carved terrain collision mesh alongside visual roads
 9. **Dual Import Support**: Support both Road Architect JSON and DecalRoad object import
 10. **Format Conversion**: Convert between Road Architect, DecalRoad, and OpenDRIVE formats
+11. **Terrain Base Texture Import**: Import and apply standardized terrain base textures
+12. **Texture Naming Convention**: Implement BeamNG's terrain texture naming scheme
 
 ## Example Usage
 ```python
@@ -346,6 +364,16 @@ Key findings from investigation:
 2. **Generation Process**: ✅ Road Architect → Render Mode → DecalRoad objects appear in scene tree
 3. **Export Capability**: ✅ Road Architect can export JSON data (consumer BeamNG versions)
 4. **Data Formats**: Road Architect JSON ≠ OpenDRIVE format (different structure and properties)
+5. **Terrain Textures**: ✅ Built-in levels use standardized `t_terrain_base_*.png` naming convention
+
+### Terrain Base Texture Investigation ✅ CONFIRMED
+Key findings about terrain texturing:
+
+1. **Naming Convention**: Standardized `t_terrain_base_[suffix].png` format
+2. **PBR Material Maps**: ao, b (albedo), h (height), nm (normal), r (roughness)
+3. **Built-in vs User Maps**: Built-in levels have access, user-created maps may not
+4. **Engine Integration**: Likely hardcoded naming scheme expected by BeamNG engine
+5. **Texture Availability**: User-created maps in editor don't necessarily have access to these textures
 
 ### Road Architect vs DecalRoad Data
 - **Road Architect JSON**: High-level design parameters (bridge settings, display options, grouping)

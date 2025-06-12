@@ -2,6 +2,8 @@
 
 A comprehensive Blender addon for importing and exporting BeamNG.drive level data, featuring **16-bit EXR displacement terrain import** for high-quality, non-destructive terrain workflows.
 
+![](./showcase.png)
+
 ## 🌟 Features
 
 ### ✅ **Current (Phase 2)**
