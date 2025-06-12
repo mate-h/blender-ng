@@ -21,7 +21,9 @@ if str(addon_dir) not in sys.path:
     sys.path.append(str(addon_dir))
 
 # Import BeamNG terrain node group
-from ..utils.beamng_terrain_node_group import beamng_terrain_node_group
+from ..utils.terrain_node_group import terrain_node_group
+# Import terrain material function
+from ..utils.terrain_material import terrain_material_node_group
 
 class BeamNGTerrainParser:
     """Integrated BeamNG terrain parser for the addon - SOURCE OF TRUTH from ter_parser.py"""
@@ -379,6 +381,8 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             # Parse terrain data
             parser = BeamNGTerrainParser(ter_file, json_file)
             terrain_data = parser.parse_terrain()
+            # Add level directory to terrain data for texture loading
+            terrain_data['level_directory'] = directory
             heightmap = terrain_data['heightmap']
             layermap = terrain_data['layermap']
             
@@ -569,16 +573,66 @@ class ImportBeamNGLevel(Operator, ImportHelper):
                 terrain_position.get('z', 0.0)
             )
         
-        # Create or get basic material for the terrain (placeholder)
+        # Create advanced terrain material with textures
         material_name = "BeamNG_Terrain_Material"
-        if material_name not in bpy.data.materials:
-            terrain_material = bpy.data.materials.new(name=material_name)
-            terrain_material.use_nodes = True
+        
+        # Find terrain texture files in the level directory
+        # Get level directory from terrain data
+        level_dir = Path(terrain_data.get('level_directory', ''))
+        terrain_textures_dir = level_dir / "art" / "terrains"
+        
+        # Look for common terrain texture patterns
+        texture_ao_path = None
+        texture_base_path = None  
+        texture_roughness_path = None
+        
+        if terrain_textures_dir.exists():
+            # Find texture files - prioritize terrain_base textures first
+            texture_patterns = {
+                'ao': ['t_terrain_base_ao.png', 't_terrain_base02_ao.png'],
+                'base': ['t_terrain_base_b.png', 't_terrain_base02_b.png'],
+                'roughness': ['t_terrain_base_r.png', 't_terrain_base02_r.png']
+            }
+            
+            for tex_type, patterns in texture_patterns.items():
+                for pattern in patterns:
+                    tex_path = terrain_textures_dir / pattern
+                    if tex_path.exists():
+                        if tex_type == 'ao':
+                            texture_ao_path = str(tex_path)
+                        elif tex_type == 'base':
+                            texture_base_path = str(tex_path)
+                        elif tex_type == 'roughness':
+                            texture_roughness_path = str(tex_path)
+                        print(f"📁 Found terrain texture ({tex_type}): {pattern}")
+                        break
+        
+        # Create terrain material with found textures
+        terrain_material = terrain_material_node_group(
+            material_name=material_name,
+            texture_ao_path=texture_ao_path,
+            texture_base_path=texture_base_path,
+            texture_roughness_path=texture_roughness_path
+        )
+        
+        print(f"✅ Created terrain material: {terrain_material.name}")
+        print(f"   Material ID: {id(terrain_material)}")
+        if texture_ao_path:
+            print(f"   AO texture: {Path(texture_ao_path).name}")
+        if texture_base_path:
+            print(f"   Base texture: {Path(texture_base_path).name}")
+        if texture_roughness_path:
+            print(f"   Roughness texture: {Path(texture_roughness_path).name}")
+        
+        # Assign material directly to the terrain object as well
+        if terrain_obj.data.materials:
+            terrain_obj.data.materials[0] = terrain_material
         else:
-            terrain_material = bpy.data.materials[material_name]
+            terrain_obj.data.materials.append(terrain_material)
+        print(f"✅ Assigned material to terrain object: {terrain_obj.name}")
         
         # Create or get the BeamNG terrain node group with all parameters
-        node_group = beamng_terrain_node_group(
+        node_group = terrain_node_group(
             displacement_image=displacement_texture,
             layermap_image=layermap_texture,
             material=terrain_material,
