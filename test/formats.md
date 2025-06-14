@@ -2,6 +2,7 @@
 
 First one is a road, second one is the edge.
 
+`/Volumes/Goodboy/github/blend-ng/test/small_island/main/MissionGroup/roads/items.level.json`
 ```json
 [
   {
@@ -83,6 +84,7 @@ First one is a road, second one is the edge.
 
 ## Material
 
+`/Volumes/Goodboy/github/blend-ng/test/small_island/art/road/main.materials.json`
 ```json
 {
   "tread_marks_damaged_02": {
