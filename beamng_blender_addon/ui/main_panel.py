@@ -32,11 +32,12 @@ class BeamNGMainPanel(Panel):
         row.label(text="Import", icon='IMPORT')
         
         row = box.row()
-        row.operator("import_scene.beamng_level", text="Import Level", icon='FILEBROWSER')
+        row.operator("import_scene.beamng_level", text="Import BeamNG Level", icon='FILEBROWSER')
         
-        # Quick info about import
-        row = box.row()
-        row.label(text="Supports: .ter terrain files", icon='INFO')
+        # Quick info about imports
+        col = box.column(align=True)
+        col.label(text="Imports: Terrain + DecalRoads + Materials", icon='INFO')
+        col.label(text="Supports: .ter, .json level data", icon='INFO')
         
         layout.separator()
         
@@ -54,8 +55,36 @@ class BeamNGMainPanel(Panel):
         
         layout.separator()
         
+        # Level content section
+        box = layout.box()
+        row = box.row()
+        row.label(text="Level Content", icon='OUTLINER')
+        
+        # Check if there are any DecalRoad objects in scene
+        decal_roads = [obj for obj in bpy.data.objects if obj.get('beamng_type') == 'DecalRoad']
+        terrain_objects = [obj for obj in bpy.data.objects if obj.name.startswith('BeamNG_Terrain')]
+        
         col = box.column(align=True)
-        col.label(text="Version: 0.2.5")
+        
+        if terrain_objects:
+            col.label(text=f"Terrain objects: {len(terrain_objects)}", icon='MESH_PLANE')
+        
+        if decal_roads:
+            col.label(text=f"DecalRoads: {len(decal_roads)}", icon='CURVE_BEZCURVE')
+            
+            # Show material info for first road
+            if len(decal_roads) > 0:
+                road = decal_roads[0]
+                material_name = road.get('beamng_material', 'No material')
+                col.label(text=f"Road material: {material_name[:20]}...")
+                
+        if not terrain_objects and not decal_roads:
+            col.label(text="No BeamNG objects in scene")
+        
+        layout.separator()
+        
+        col = layout.column(align=True)
+        col.label(text="Version: 0.3.0")
 
 def register():
     pass

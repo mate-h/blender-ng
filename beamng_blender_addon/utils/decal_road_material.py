@@ -1,7 +1,174 @@
 import bpy
+from pathlib import Path
+from typing import Optional, Dict, Any
 
 # mat = bpy.data.materials.new(name = "tread_marks_damaged_02")
 # mat.use_nodes = True
+
+def load_or_create_texture(image_path: str, level_path: Path) -> Optional[bpy.types.Image]:
+    """Load or create a texture image from BeamNG path"""
+    if not image_path:
+        return None
+    
+    # Convert BeamNG path to filesystem path
+    # BeamNG paths start with /levels/levelname/... 
+    if image_path.startswith('/levels/'):
+        parts = image_path.split('/')
+        if len(parts) >= 3:
+            # Remove /levels/levelname and use remaining path
+            relative_path = '/'.join(parts[3:])
+            full_path = level_path / relative_path
+        else:
+            return None
+    else:
+        # Relative path
+        full_path = level_path / image_path.lstrip('/')
+    
+    # Check if image already loaded
+    image_name = full_path.name
+    if image_name in bpy.data.images:
+        return bpy.data.images[image_name]
+    
+    # List of extensions to try in order of preference
+    # BeamNG commonly uses DDS, PNG, JPG, TGA formats
+    extensions_to_try = [
+        full_path.suffix,  # Original extension first
+        '.DDS', '.dds',
+        '.PNG', '.png', 
+        '.JPG', '.jpg',
+        '.TGA', '.tga',
+        '.JPEG', '.jpeg'
+    ]
+    
+    # Remove duplicates while preserving order
+    unique_extensions = []
+    for ext in extensions_to_try:
+        if ext and ext not in unique_extensions:
+            unique_extensions.append(ext)
+    
+    # Try loading with different extensions
+    for extension in unique_extensions:
+        try_path = full_path.with_suffix(extension)
+        
+        if try_path.exists():
+            try:
+                image = bpy.data.images.load(str(try_path))
+                print(f"✅ Loaded texture: {try_path.name} (tried extension: {extension})")
+                return image
+            except Exception as e:
+                print(f"❌ Failed to load texture {try_path}: {e}")
+                continue
+    
+    # If no extensions worked, try without extension (for extensionless files)
+    no_ext_path = full_path.with_suffix('')
+    if no_ext_path.exists():
+        try:
+            image = bpy.data.images.load(str(no_ext_path))
+            print(f"✅ Loaded texture: {no_ext_path.name} (no extension)")
+            return image
+        except Exception as e:
+            print(f"❌ Failed to load texture {no_ext_path}: {e}")
+    
+    print(f"⚠️  Texture not found with any extension: {full_path.stem}")
+    return None
+
+def create_beamng_decal_road_material(material_name: str, material_data: Optional[Dict[str, Any]] = None, level_path: Optional[Path] = None) -> bpy.types.Material:
+    """Create a BeamNG decal road material from material data"""
+    
+    # Create or get existing material
+    if material_name in bpy.data.materials:
+        mat = bpy.data.materials[material_name]
+        # Clear existing nodes to rebuild
+        mat.node_tree.nodes.clear()
+    else:
+        mat = bpy.data.materials.new(name=material_name)
+        mat.use_nodes = True
+        mat.node_tree.nodes.clear()
+    
+    # Use the existing node group function but with dynamic data
+    node_tree = decal_road_material_node_group(mat)
+    
+    # If we have material data, configure the material accordingly
+    if material_data and level_path:
+        configure_material_from_beamng_data(mat, material_data, level_path)
+    
+    return mat
+
+def configure_material_from_beamng_data(mat: bpy.types.Material, material_data: Dict[str, Any], level_path: Path):
+    """Configure material nodes based on BeamNG material data"""
+    
+    # Get the primary stage (first non-null stage)
+    primary_stage = None
+    stages = material_data.get('stages', [])
+    
+    for stage in stages:
+        if stage and any(v is not None for v in stage.values()):
+            primary_stage = stage
+            break
+    
+    if not primary_stage:
+        print(f"⚠️  No valid material stage found for {mat.name}")
+        return
+    
+    nodes = mat.node_tree.nodes
+    
+    # Update base color factor
+    base_color_factor = primary_stage.get('baseColorFactor')
+    if base_color_factor and 'Mix' in nodes:
+        mix_node = nodes['Mix']
+        mix_node.inputs[7].default_value = tuple(base_color_factor)
+    
+    # Update roughness factor
+    roughness_factor = primary_stage.get('roughnessFactor')
+    if roughness_factor is not None and 'Math' in nodes:
+        math_node = nodes['Math']
+        math_node.inputs[1].default_value = roughness_factor
+    
+    # Update opacity factor
+    opacity_factor = primary_stage.get('opacityFactor')
+    if opacity_factor is not None and 'Math.001' in nodes:
+        math_opacity_node = nodes['Math.001']
+        math_opacity_node.inputs[1].default_value = opacity_factor
+    
+    # Update detail normal map strength
+    detail_normal_strength = primary_stage.get('detailNormalMapStrength')
+    if detail_normal_strength is not None and 'Normal Map.001' in nodes:
+        detail_normal_node = nodes['Normal Map.001']
+        detail_normal_node.inputs[0].default_value = detail_normal_strength
+    
+    # Update detail scale
+    detail_scale = primary_stage.get('detailScale')
+    if detail_scale and 'Vector Math.001' in nodes:
+        detail_scale_node = nodes['Vector Math.001']
+        detail_scale_node.inputs[1].default_value = (*detail_scale, 0.0)
+    
+    # Load textures
+    texture_mappings = {
+        'ambientOcclusionMap': 'Image Texture',      # AO
+        'baseColorMap': 'Image Texture.001',         # Color/Diffuse
+        'normalMap': 'Image Texture.002',            # Normal
+        'opacityMap': 'Image Texture.003',           # Opacity
+        'roughnessMap': 'Image Texture.004',         # Roughness
+        'detailNormalMap': 'Image Texture.005'       # Detail Normal
+    }
+    
+    for beamng_key, node_name in texture_mappings.items():
+        texture_path = primary_stage.get(beamng_key)
+        if texture_path and node_name in nodes:
+            image = load_or_create_texture(texture_path, level_path)
+            if image:
+                nodes[node_name].image = image
+    
+    # Set material properties based on BeamNG data
+    mat.blend_method = 'BLEND' if material_data.get('translucent', False) else 'OPAQUE'
+    mat.use_backface_culling = not material_data.get('translucent', False)
+    
+    # Set alpha test
+    if material_data.get('alphaTest', False):
+        mat.blend_method = 'CLIP'
+        mat.alpha_threshold = material_data.get('alphaRef', 0) / 255.0
+    
+    print(f"✅ Configured material: {mat.name}")
 
 #initialize tread_marks_damaged_02 node group
 def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderNodeTree:
@@ -86,8 +253,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture.label = "ao"
     image_texture.name = "Image Texture"
     image_texture.extension = 'REPEAT'
-    if "t_asphalt_damaged_01_ao.data.DDS" in bpy.data.images:
-        image_texture.image = bpy.data.images["t_asphalt_damaged_01_ao.data.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture.image_user.frame_current = 0
     image_texture.image_user.frame_duration = 100
     image_texture.image_user.frame_offset = 0
@@ -104,8 +270,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture_001.label = "color"
     image_texture_001.name = "Image Texture.001"
     image_texture_001.extension = 'REPEAT'
-    if "t_asphalt_damaged_01_b.color.DDS" in bpy.data.images:
-        image_texture_001.image = bpy.data.images["t_asphalt_damaged_01_b.color.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture_001.image_user.frame_current = 0
     image_texture_001.image_user.frame_duration = 100
     image_texture_001.image_user.frame_offset = 0
@@ -122,8 +287,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture_002.label = "normal"
     image_texture_002.name = "Image Texture.002"
     image_texture_002.extension = 'REPEAT'
-    if "t_asphalt_damaged_01_nm.normal.DDS" in bpy.data.images:
-        image_texture_002.image = bpy.data.images["t_asphalt_damaged_01_nm.normal.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture_002.image_user.frame_current = 0
     image_texture_002.image_user.frame_duration = 100
     image_texture_002.image_user.frame_offset = 0
@@ -140,8 +304,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture_003.label = "opacity"
     image_texture_003.name = "Image Texture.003"
     image_texture_003.extension = 'REPEAT'
-    if "t_asphalt_damaged_01_o.data.DDS" in bpy.data.images:
-        image_texture_003.image = bpy.data.images["t_asphalt_damaged_01_o.data.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture_003.image_user.frame_current = 0
     image_texture_003.image_user.frame_duration = 100
     image_texture_003.image_user.frame_offset = 0
@@ -158,8 +321,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture_004.label = "roughness"
     image_texture_004.name = "Image Texture.004"
     image_texture_004.extension = 'REPEAT'
-    if "t_asphalt_damaged_01_r.data.DDS" in bpy.data.images:
-        image_texture_004.image = bpy.data.images["t_asphalt_damaged_01_r.data.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture_004.image_user.frame_current = 0
     image_texture_004.image_user.frame_duration = 100
     image_texture_004.image_user.frame_offset = 0
@@ -182,7 +344,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     mix.factor_mode = 'UNIFORM'
     #Factor_Float
     mix.inputs[0].default_value = 1.0
-    #B_Color
+    #B_Color - Default values, will be overridden by configure function
     mix.inputs[7].default_value = (0.6446059942245483, 0.6446030139923096, 0.6445990204811096, 0.6000000238418579)
 
     #node Math
@@ -191,7 +353,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     math.name = "Math"
     math.operation = 'MULTIPLY'
     math.use_clamp = False
-    #Value_001
+    #Value_001 - Default value, will be overridden by configure function
     math.inputs[1].default_value = 0.8560000061988831
 
     #node Math.001
@@ -200,7 +362,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     math_001.name = "Math.001"
     math_001.operation = 'MULTIPLY'
     math_001.use_clamp = False
-    #Value_001
+    #Value_001 - Default value, will be overridden by configure function
     math_001.inputs[1].default_value = 0.9010000228881836
 
     #node Image Texture.005
@@ -208,8 +370,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     image_texture_005.label = "detailNormal"
     image_texture_005.name = "Image Texture.005"
     image_texture_005.extension = 'REPEAT'
-    if "t_asphalt_detail_02_nm.normal.DDS" in bpy.data.images:
-        image_texture_005.image = bpy.data.images["t_asphalt_detail_02_nm.normal.DDS"]
+    # Don't set default image - will be set by configure function
     image_texture_005.image_user.frame_current = 0
     image_texture_005.image_user.frame_duration = 100
     image_texture_005.image_user.frame_offset = 0
@@ -226,7 +387,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     vector_math_001.label = "detailScale"
     vector_math_001.name = "Vector Math.001"
     vector_math_001.operation = 'MULTIPLY'
-    #Vector_001
+    #Vector_001 - Default value, will be overridden by configure function
     vector_math_001.inputs[1].default_value = (2.0, 8.0, 0.0)
 
     #node Normal Map
@@ -244,7 +405,7 @@ def decal_road_material_node_group(mat: bpy.types.Material) -> bpy.types.ShaderN
     normal_map_001.name = "Normal Map.001"
     normal_map_001.space = 'TANGENT'
     normal_map_001.uv_map = ""
-    #Strength
+    #Strength - Default value, will be overridden by configure function
     normal_map_001.inputs[0].default_value = 2.0
 
     #node Material Output

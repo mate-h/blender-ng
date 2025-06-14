@@ -24,6 +24,10 @@ if str(addon_dir) not in sys.path:
 from ..utils.terrain_node_group import terrain_node_group
 # Import terrain material function
 from ..utils.terrain_material import terrain_material_node_group
+# Import DecalRoad utilities
+from ..parsers.decal_road_parser import DecalRoadParser, DecalRoadData, MaterialData
+from ..utils.decal_road_material import create_beamng_decal_road_material
+from ..utils.decal_road import decal_road_node_group
 
 class BeamNGTerrainParser:
     """Integrated BeamNG terrain parser for the addon - SOURCE OF TRUTH from ter_parser.py"""
@@ -279,6 +283,12 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         default=False,
     )
     
+    import_decal_roads: BoolProperty(
+        name="Import DecalRoads",
+        description="Import DecalRoad objects with materials and geometry nodes",
+        default=True,
+    )
+    
     def execute(self, context):
         """Execute the import operation"""
         try:
@@ -311,6 +321,10 @@ class ImportBeamNGLevel(Operator, ImportHelper):
             # Import lighting if enabled
             if self.import_lighting:
                 self.import_lighting_data(directory)
+            
+            # Import DecalRoads if enabled
+            if self.import_decal_roads:
+                self.import_decal_roads_data(directory)
             
             self.report({'INFO'}, "BeamNG level import completed successfully")
             return {'FINISHED'}
@@ -763,6 +777,178 @@ class ImportBeamNGLevel(Operator, ImportHelper):
         self.report({'INFO'}, "Importing lighting... (placeholder)")
         # TODO: Implement lighting import in Phase 5
         pass
+    
+    def import_decal_roads_data(self, directory):
+        """Import DecalRoad objects from level data"""
+        try:
+            self.report({'INFO'}, "Importing DecalRoad objects...")
+            
+            # Parse DecalRoad data
+            parser = DecalRoadParser(directory)
+            parser.parse_level()
+            
+            roads_data = parser.get_roads_data()
+            if not roads_data:
+                self.report({'INFO'}, "No DecalRoad objects found in level")
+                return
+            
+            # Create or get DecalRoads collection
+            roads_collection = self.get_or_create_collection("DecalRoads")
+            
+            # Get existing road persistent IDs to avoid duplicates
+            existing_road_ids = set()
+            for obj in bpy.data.objects:
+                if obj.get('beamng_type') == 'DecalRoad':
+                    existing_id = obj.get('beamng_persistent_id')
+                    if existing_id:
+                        existing_road_ids.add(existing_id)
+            
+            print(f"🔍 Found {len(existing_road_ids)} existing DecalRoad objects")
+            
+            # Create materials if materials import is enabled
+            if self.import_materials:
+                self.create_decal_road_materials(parser, directory)
+            
+            # Create geometry node group
+            self.ensure_decal_road_node_group()
+            
+            # Import each road
+            imported_count = 0
+            skipped_count = 0
+            for road_data in roads_data:
+                try:
+                    # Skip if road already exists
+                    if road_data.persistent_id in existing_road_ids:
+                        print(f"⏭️  Skipping duplicate road: {road_data.persistent_id[:8]}")
+                        skipped_count += 1
+                        continue
+                    
+                    road_obj = self.create_decal_road_object(road_data, parser, directory)
+                    if road_obj:
+                        roads_collection.objects.link(road_obj)
+                        imported_count += 1
+                        
+                except Exception as e:
+                    print(f"❌ Failed to import road {road_data.persistent_id}: {e}")
+                    continue
+            
+            # Report results
+            stats = parser.get_stats()
+            message = f"Imported {imported_count} DecalRoad objects ({stats['unique_materials_used']} unique materials)"
+            if skipped_count > 0:
+                message += f", skipped {skipped_count} duplicates"
+            self.report({'INFO'}, message)
+            
+        except Exception as e:
+            self.report({'WARNING'}, f"DecalRoad import failed: {str(e)}")
+            print(f"❌ DecalRoad import error: {e}")
+    
+    def get_or_create_collection(self, name: str) -> bpy.types.Collection:
+        """Get or create a collection"""
+        if name in bpy.data.collections:
+            return bpy.data.collections[name]
+        
+        collection = bpy.data.collections.new(name)
+        bpy.context.scene.collection.children.link(collection)
+        return collection
+    
+    def create_decal_road_materials(self, parser: DecalRoadParser, level_path: str):
+        """Create materials for all roads"""
+        unique_materials = parser.get_unique_materials()
+        
+        print(f"🎨 Creating {len(unique_materials)} DecalRoad materials...")
+        
+        for material_name in unique_materials:
+            material_data = parser.get_material(material_name)
+            
+            # Create material with BeamNG data
+            mat = create_beamng_decal_road_material(
+                material_name, 
+                material_data.__dict__ if material_data else None,
+                Path(level_path)
+            )
+            
+            print(f"  ✅ Created material: {material_name}")
+    
+    def ensure_decal_road_node_group(self):
+        """Ensure the DecalRoad geometry node group exists"""
+        if "BeamNG_DecalRoad" not in bpy.data.node_groups:
+            decal_road_node_group()
+            print("✅ Created BeamNG_DecalRoad geometry node group")
+    
+    def create_decal_road_object(self, road_data: DecalRoadData, parser: DecalRoadParser, level_path: str) -> bpy.types.Object:
+        """Create a Blender curve object from DecalRoad data"""
+        
+        # Create curve with unique name
+        curve_name = f"DecalRoad_{road_data.persistent_id[:8]}"
+        
+        # Ensure unique curve data name
+        curve_data_name = curve_name
+        counter = 1
+        while curve_data_name in bpy.data.curves:
+            curve_data_name = f"{curve_name}.{counter:03d}"
+            counter += 1
+            
+        curve_data = bpy.data.curves.new(curve_data_name, type='CURVE')
+        curve_data.dimensions = '3D'
+        curve_data.resolution_u = 12
+        
+        # Create spline
+        spline = curve_data.splines.new('POLY')
+        spline.points.add(len(road_data.nodes) - 1)
+        
+        # Set control points
+        for i, node in enumerate(road_data.nodes):
+            x, y, z, width = node
+            spline.points[i].co = (x, y, z, 1.0)
+            spline.points[i].radius = width
+        
+        # Create object with unique name
+        object_name = curve_name
+        counter = 1
+        while object_name in bpy.data.objects:
+            object_name = f"{curve_name}.{counter:03d}"
+            counter += 1
+            
+        curve_obj = bpy.data.objects.new(object_name, curve_data)
+        
+        # Set custom properties
+        curve_obj["beamng_type"] = "DecalRoad"
+        curve_obj["beamng_material"] = road_data.material
+        curve_obj["beamng_persistent_id"] = road_data.persistent_id
+        curve_obj["beamng_texture_length"] = road_data.texture_length
+        curve_obj["beamng_break_angle"] = road_data.break_angle
+        curve_obj["beamng_improved_spline"] = road_data.improved_spline
+        curve_obj["beamng_render_priority"] = road_data.render_priority
+        curve_obj["beamng_start_end_fade"] = road_data.start_end_fade
+        curve_obj["beamng_distance_fade"] = road_data.distance_fade
+        
+        # Apply material if available and requested
+        if self.import_materials and road_data.material in bpy.data.materials:
+            material = bpy.data.materials[road_data.material]
+            curve_data.materials.append(material)
+        
+        # Apply geometry nodes
+        if "BeamNG_DecalRoad" in bpy.data.node_groups:
+            modifier = curve_obj.modifiers.new(name="DecalRoad_GeometryNodes", type='NODES')
+            modifier.node_group = bpy.data.node_groups["BeamNG_DecalRoad"]
+            
+            # Set geometry node modifier inputs using socket indices
+            # Based on the node group interface: Socket 5 = Material, Socket 6 = Texture Length
+            try:
+                # Set texture length parameter (Socket 6)
+                modifier["Socket_6"] = road_data.texture_length
+            except Exception as e:
+                print(f"⚠️  Could not set texture length for {curve_obj.name}: {e}")
+            
+            # Set material if available (Socket 5)
+            if self.import_materials and road_data.material in bpy.data.materials:
+                try:
+                    modifier["Socket_5"] = bpy.data.materials[road_data.material]
+                except Exception as e:
+                    print(f"⚠️  Could not set material {road_data.material} for {curve_obj.name}: {e}")
+        
+        return curve_obj
 
 def register():
     bpy.utils.register_class(ImportBeamNGLevel)

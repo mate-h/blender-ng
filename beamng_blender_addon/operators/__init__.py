@@ -5,11 +5,13 @@ Contains all import/export operations
 
 from .import_level import ImportBeamNGLevel
 from .export_level import ExportBeamNGLevel
+from .import_decal_roads import ImportBeamNGDecalRoads
 
-# List of operator classes
+# List of operator classes - DecalRoad import is now integrated into main level import
 classes = [
     ImportBeamNGLevel,
     ExportBeamNGLevel,
+    # ImportBeamNGDecalRoads,  # Keep available but not registered - integrated into main import
 ]
 
 def register():
