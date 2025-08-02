@@ -20,6 +20,43 @@ The `.ter` file begins with a 5-byte header:
 | 0x00   | 1    | char | Format version number (typically 9) |
 | 0x01   | 4    | uint32 (little-endian) | Terrain dimensions (size × size) |
 
+## Coordinate System
+
+### BeamNG Coordinate System
+BeamNG uses a **bottom-left origin** coordinate system for terrain:
+
+- **World Origin**: For a 1024×1024 terrain, the world center is at (0, 0, 0)
+- **Terrain Bounds**: Spans from (-512, -512) to (+512, +512) in world units
+- **Array Indexing**: `heightmap[y][x]` where:
+  - `heightmap[0][0]` = **bottom-left** corner = world position (-512, -512)
+  - `heightmap[1023][1023]` = **top-right** corner = world position (+512, +512)
+  - **Y-axis**: Increases from bottom (south) to top (north)
+  - **X-axis**: Increases from left (west) to right (east)
+
+### Blender Coordinate System Differences
+Blender and most image formats use **top-left origin**:
+
+- **Array Indexing**: `image[y][x]` where:
+  - `image[0][0]` = **top-left** corner
+  - **Y-axis**: Increases from top to bottom (opposite of BeamNG)
+
+### Coordinate Transformation
+When converting between BeamNG and Blender:
+
+**Import (BeamNG → Blender)**: Flip Y-axis
+```python
+# Flip heightmap and layermap vertically
+heightmap_blender = np.flipud(heightmap_beamng)
+layermap_blender = np.flipud(layermap_beamng)
+```
+
+**Export (Blender → BeamNG)**: Flip Y-axis back
+```python
+# Flip heightmap and layermap vertically before writing
+heightmap_beamng = np.flipud(heightmap_blender)
+layermap_beamng = np.flipud(layermap_blender)
+```
+
 ### Data Layout
 
 **CORRECTED**: Data starts immediately after the header at offset 0x05 (not 0x100):

@@ -213,6 +213,21 @@ class BeamNGTerrainParser:
                 print(f"❌ Could not read layer map: {e}")
                 layermap = None
             
+            # 🔄 COORDINATE SYSTEM TRANSFORMATION
+            # BeamNG uses bottom-left origin, Blender uses top-left origin
+            # Flip Y-axis to convert BeamNG → Blender coordinate system
+            print("🔄 Applying coordinate system transformation (BeamNG → Blender)")
+            
+            if heightmap is not None:
+                heightmap_original_shape = heightmap.shape
+                heightmap = np.flipud(heightmap)  # Flip vertically
+                print(f"   Heightmap Y-axis flipped: {heightmap_original_shape} → {heightmap.shape}")
+            
+            if layermap is not None:
+                layermap_original_shape = layermap.shape
+                layermap = np.flipud(layermap)  # Flip vertically
+                print(f"   Layermap Y-axis flipped: {layermap_original_shape} → {layermap.shape}")
+            
             return {
                 'header': {
                     'version': version,

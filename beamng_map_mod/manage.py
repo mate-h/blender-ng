@@ -106,14 +106,55 @@ class BeamNGModManager:
         try:
             self.print_status(f"Creating mod zip file: {output_path}")
             
+            # First pass: count total files to process
+            all_files = [f for f in source_dir.rglob("*") if f.is_file()]
+            total_files = len(all_files)
+            total_size = sum(f.stat().st_size for f in all_files)
+            
+            self.print_status(f"Found {total_files} files ({total_size / (1024*1024):.1f} MB) to package")
+            print()
+            
+            # Second pass: create zip with progress
             with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file_path in source_dir.rglob("*"):
-                    if file_path.is_file():
-                        # Get relative path from source directory
-                        relative_path = file_path.relative_to(source_dir)
-                        zipf.write(file_path, relative_path)
+                processed_files = 0
+                processed_size = 0
+                
+                for file_path in all_files:
+                    # Get relative path from source directory
+                    relative_path = file_path.relative_to(source_dir)
+                    file_size = file_path.stat().st_size
+                    
+                    # Display progress
+                    processed_files += 1
+                    processed_size += file_size
+                    progress_percent = (processed_files / total_files) * 100
+                    size_percent = (processed_size / total_size) * 100 if total_size > 0 else 0
+                    
+                    # Format file path for display (truncate if too long)
+                    display_path = str(relative_path)
+                    if len(display_path) > 50:
+                        display_path = "..." + display_path[-47:]
+                    
+                    # Print progress line (overwrite previous line)
+                    print(f"\r{Colors.BLUE}[{processed_files:3d}/{total_files}]{Colors.NC} "
+                          f"({progress_percent:5.1f}%) "
+                          f"({processed_size/(1024*1024):5.1f}/{total_size/(1024*1024):5.1f} MB) "
+                          f"{display_path}", end="", flush=True)
+                    
+                    # Add file to zip
+                    zipf.write(file_path, relative_path)
+                
+                # Clear the progress line and show completion
+                print()
                         
             self.print_success(f"Mod zip created successfully: {output_path}")
+            
+            # Show final zip file size
+            final_zip_size = output_path.stat().st_size
+            compression_ratio = (1 - final_zip_size / total_size) * 100 if total_size > 0 else 0
+            self.print_status(f"Final zip size: {final_zip_size / (1024*1024):.1f} MB "
+                             f"(compression: {compression_ratio:.1f}%)")
+            
             return True
             
         except Exception as e:
