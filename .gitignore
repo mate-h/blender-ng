@@ -149,4 +149,5 @@ logs/
 test/exports
 test/small_island
 
-bc_coast
+beamng_map_mod/levels
+beamng_map_mod/temp_bc_coast

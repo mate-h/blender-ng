@@ -1,0 +1,29 @@
+{
+    "mod_name": "bc_coast",
+    "mod_version": "1.0.0",
+    "mod_id": "BCCOAST",
+    "mod_title": "BC Coast",
+    "description": "A coastal driving map for BeamNG.drive, based on the small island map but renamed and themed for British Columbia coastal environments.",
+    "features": [
+        "Coastal island terrain with varied elevation",
+        "Multiple spawn points (north, south, industrial)",
+        "Asphalt and gravel roads",
+        "Forest and rock formations",
+        "Harbor and helipad areas",
+        "Multiple race configurations"
+    ],
+    "beamng_paths": [
+        "~/Documents/BeamNG.drive",
+        "~/Library/Application Support/BeamNG.drive",
+        "%APPDATA%/BeamNG.drive",
+        "/Volumes/Goodboy/crossover/Steam/drive_c/users/crossover/AppData/Local/BeamNG.drive"
+    ],
+    "required_files": [
+        "info.json",
+        "mainLevel.lua"
+    ],
+    "optional_files": [
+        "bc_coast_preview.jpg",
+        "bc_coast_minimap.png"
+    ]
+} 
