@@ -148,3 +148,5 @@ logs/
 *.blend1
 test/exports
 test/small_island
+
+bc_coast

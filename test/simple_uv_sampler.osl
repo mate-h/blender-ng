@@ -1,0 +1,41 @@
+// Simple OSL UV Sampler - Compatible with OptiX backend
+// For Blender 4.4 Script Node
+
+shader simple_uv_sampler(
+    // Input parameters
+    vector WorldPosition = P,
+    string UVAttribute = "geom:uv",
+    float BlendFactor = 1.0,
+    
+    // Output parameters
+    output float UV_U = 0.0,
+    output float UV_V = 0.0,
+    output color UV_Color = color(0.0, 0.0, 0.0)
+)
+{
+    // Get UV coordinates from current surface
+    point uv_coords = point(0, 0, 0);
+    
+    // Try to get the specified UV attribute
+    if (getattribute(UVAttribute, uv_coords)) {
+        UV_U = uv_coords[0];
+        UV_V = uv_coords[1];
+    }
+    // Fallback to default UV
+    else if (getattribute("geom:uv", uv_coords)) {
+        UV_U = uv_coords[0];
+        UV_V = uv_coords[1];
+    }
+    // Last resort: use generated coordinates
+    else if (getattribute("geom:generated", uv_coords)) {
+        UV_U = uv_coords[0];
+        UV_V = uv_coords[1];
+    }
+    
+    // Apply blend factor
+    UV_U *= BlendFactor;
+    UV_V *= BlendFactor;
+    
+    // Output UV as color for visualization
+    UV_Color = color(UV_U, UV_V, 0.0);
+} 

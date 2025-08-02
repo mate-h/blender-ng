@@ -1,0 +1,66 @@
+// OSL Shader for UV Sampling from Nearest Surface
+// Compatible with Blender 4.4 Script Node
+
+shader uv_sampler(
+    // Input parameters
+    point SamplePosition = P,
+    vector SampleDirection = -N,
+    float MaxDistance = 1.0,
+    string UVLayer = "geom:uv",
+    int UseFallback = 1,
+    
+    // Output parameters
+    output float UV_U = 0.0,
+    output float UV_V = 0.0,
+    output float Hit_Distance = 0.0,
+    output int Hit_Success = 0
+)
+{
+    // Initialize outputs
+    UV_U = 0.0;
+    UV_V = 0.0;
+    Hit_Distance = 0.0;
+    Hit_Success = 0;
+    
+    // Trace a ray to find nearest surface
+    if (trace(SamplePosition, SampleDirection, "maxdist", MaxDistance)) {
+        Hit_Success = 1;
+        
+        // Get hit distance
+        getmessage("trace", "hitdist", Hit_Distance);
+        
+        // Try to get UV coordinates from the hit surface
+        point hit_uv = point(0, 0, 0);
+        
+        if (getmessage("trace", UVLayer, hit_uv)) {
+            UV_U = hit_uv[0];
+            UV_V = hit_uv[1];
+        }
+        else if (UseFallback) {
+            // Fallback: try default UV attribute
+            if (getmessage("trace", "geom:uv", hit_uv)) {
+                UV_U = hit_uv[0];
+                UV_V = hit_uv[1];
+            }
+            else {
+                // Last resort: use generated coordinates
+                if (getmessage("trace", "geom:generated", hit_uv)) {
+                    UV_U = hit_uv[0];
+                    UV_V = hit_uv[1];
+                }
+            }
+        }
+    }
+    else if (UseFallback) {
+        // No hit found, use current surface UV as fallback
+        point current_uv = point(0, 0, 0);
+        if (getattribute(UVLayer, current_uv)) {
+            UV_U = current_uv[0];
+            UV_V = current_uv[1];
+        }
+        else if (getattribute("geom:uv", current_uv)) {
+            UV_U = current_uv[0];
+            UV_V = current_uv[1];
+        }
+    }
+} 
