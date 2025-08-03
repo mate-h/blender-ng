@@ -218,15 +218,15 @@ class BeamNGTerrainParser:
             # Flip Y-axis to convert BeamNG → Blender coordinate system
             print("🔄 Applying coordinate system transformation (BeamNG → Blender)")
             
-            if heightmap is not None:
-                heightmap_original_shape = heightmap.shape
-                heightmap = np.flipud(heightmap)  # Flip vertically
-                print(f"   Heightmap Y-axis flipped: {heightmap_original_shape} → {heightmap.shape}")
+            # if heightmap is not None:
+            #     heightmap_original_shape = heightmap.shape
+            #     heightmap = np.flipud(heightmap)  # Flip vertically
+            #     print(f"   Heightmap Y-axis flipped: {heightmap_original_shape} → {heightmap.shape}")
             
-            if layermap is not None:
-                layermap_original_shape = layermap.shape
-                layermap = np.flipud(layermap)  # Flip vertically
-                print(f"   Layermap Y-axis flipped: {layermap_original_shape} → {layermap.shape}")
+            # if layermap is not None:
+            #     layermap_original_shape = layermap.shape
+            #     layermap = np.flipud(layermap)  # Flip vertically
+            #     print(f"   Layermap Y-axis flipped: {layermap_original_shape} → {layermap.shape}")
             
             return {
                 'header': {

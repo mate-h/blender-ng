@@ -83,42 +83,54 @@ def analyze_ter_file(file_path: str, max_bytes: int = 1024):
             print(f"📦 Additional data found ({remaining_after_layermap} bytes):")
             f.seek(layermap_start + layermap_bytes)
             
-            # Try to parse as coverage maps (4 maps expected)
+            # Check for material count first (more likely scenario for small additional data)
+            if remaining_after_layermap >= 4:
+                material_count_bytes = f.read(4)
+                if len(material_count_bytes) == 4:
+                    material_count = struct.unpack('<I', material_count_bytes)[0]
+                    print(f"   Material count: {material_count}")
+                    
+                    # Try to read material names
+                    materials_read = []
+                    bytes_read = 4  # Already read material count
+                    for i in range(min(material_count, 20)):  # Max 20 to avoid infinite loop
+                        if bytes_read >= remaining_after_layermap:
+                            break
+                        name_len_byte = f.read(1)
+                        bytes_read += 1
+                        if len(name_len_byte) == 1:
+                            name_len = struct.unpack('B', name_len_byte)[0]
+                            if name_len > 0 and name_len < 100 and bytes_read + name_len <= remaining_after_layermap:
+                                name_bytes = f.read(name_len)
+                                bytes_read += name_len
+                                if len(name_bytes) == name_len:
+                                    try:
+                                        name = name_bytes.decode('ascii').rstrip('\x00')
+                                        materials_read.append(name)
+                                    except:
+                                        break
+                                else:
+                                    break
+                            else:
+                                break
+                        else:
+                            break
+                    
+                    print(f"   Materials found: {materials_read}")
+                    print(f"   Material data used: {bytes_read} bytes")
+                    remaining_after_materials = remaining_after_layermap - bytes_read
+                    print(f"   Remaining after materials: {remaining_after_materials} bytes")
+                    
+                    # Check if there might be coverage maps before materials
+                    if remaining_after_materials > 0:
+                        print(f"   ⚠️ Additional unknown data: {remaining_after_materials} bytes")
+            
+            # Try to parse as coverage maps (if large amount of data)
             coverage_maps_size = size * size * 4  # 4 coverage maps
             if remaining_after_layermap >= coverage_maps_size:
                 print(f"   Possible coverage maps: {coverage_maps_size:,} bytes")
                 remaining_after_coverage = remaining_after_layermap - coverage_maps_size
                 print(f"   Remaining after coverage maps: {remaining_after_coverage} bytes")
-                
-                # Check for material count and names
-                if remaining_after_coverage >= 4:
-                    f.seek(layermap_start + layermap_bytes + coverage_maps_size)
-                    material_count_bytes = f.read(4)
-                    if len(material_count_bytes) == 4:
-                        material_count = struct.unpack('<I', material_count_bytes)[0]
-                        print(f"   Material count: {material_count}")
-                        
-                        # Try to read material names
-                        materials_read = []
-                        for i in range(min(material_count, 20)):  # Max 20 to avoid infinite loop
-                            name_len_byte = f.read(1)
-                            if len(name_len_byte) == 1:
-                                name_len = struct.unpack('B', name_len_byte)[0]
-                                if name_len > 0 and name_len < 100:  # Reasonable name length
-                                    name_bytes = f.read(name_len)
-                                    if len(name_bytes) == name_len:
-                                        try:
-                                            name = name_bytes.decode('ascii').rstrip('\x00')
-                                            materials_read.append(name)
-                                        except:
-                                            break
-                                else:
-                                    break
-                            else:
-                                break
-                        
-                        if materials_read:
-                            print(f"   Materials found: {materials_read}")
     
     return {
         'file_size': file_size,
@@ -146,8 +158,8 @@ def hex_dump(file_path: str, start: int = 0, length: int = 256):
 def main():
     """Main comparison function"""
     
-    original_path = "small_island/small_island.ter"
-    exported_path = "beamng_export/exported_terrain.ter"
+    original_path = "/Volumes/Goodboy/github/blend-ng/terrain_analysis/small_island/small_island.ter"
+    exported_path = "/Volumes/Goodboy/github/blend-ng/terrain_analysis/beamng_export/custom_level/custom_level_fixed.ter"
     
     print("🔍 BeamNG .ter File Binary Comparison")
     print("=" * 50)

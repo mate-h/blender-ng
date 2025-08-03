@@ -41,21 +41,24 @@ Blender and most image formats use **top-left origin**:
   - **Y-axis**: Increases from top to bottom (opposite of BeamNG)
 
 ### Coordinate Transformation
-When converting between BeamNG and Blender:
+When converting between BeamNG and Blender coordinate systems:
 
-**Import (BeamNG → Blender)**: Flip Y-axis
+**Import (BeamNG → Blender)**: Flip Y-axis during import
 ```python
-# Flip heightmap and layermap vertically
+# In import_level.py: Flip heightmap and layermap vertically
 heightmap_blender = np.flipud(heightmap_beamng)
 layermap_blender = np.flipud(layermap_beamng)
 ```
 
-**Export (Blender → BeamNG)**: Flip Y-axis back
+**Export (Blender → BeamNG)**: No transformation needed
 ```python
-# Flip heightmap and layermap vertically before writing
-heightmap_beamng = np.flipud(heightmap_blender)
-layermap_beamng = np.flipud(layermap_blender)
+# Blender EXR textures are already in the correct orientation for BeamNG
+# after the import Y-flip, so export them directly without additional flipping
+heightmap_beamng = heightmap_from_exr  # No flip needed
+layermap_beamng = layermap_from_exr     # No flip needed
 ```
+
+**Rationale**: The Y-axis flip is applied once during import to convert from BeamNG's bottom-left origin to Blender's top-left origin. When exporting back, the Blender textures are already in the correct orientation for BeamNG, so no additional transformation is needed.
 
 ### Data Layout
 

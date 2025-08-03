@@ -56,6 +56,20 @@ def terrain_node_group(displacement_image=None, layermap_image=None, material=No
     position_socket.subtype = 'NONE'
     position_socket.attribute_domain = 'POINT'
 
+    #Socket Heightmap
+    heightmap_socket = group.interface.new_socket(name = "Heightmap", in_out='INPUT', socket_type = 'NodeSocketImage')
+    heightmap_socket.attribute_domain = 'POINT'
+    heightmap_socket.default_value = displacement_image
+
+    #Socket Layermap
+    layermap_socket = group.interface.new_socket(name = "Layermap", in_out='INPUT', socket_type = 'NodeSocketImage')
+    layermap_socket.attribute_domain = 'POINT'
+    layermap_socket.default_value = layermap_image
+
+    #Socket Material
+    material_socket = group.interface.new_socket(name = "Material", in_out='INPUT', socket_type = 'NodeSocketMaterial')
+    material_socket.attribute_domain = 'POINT'
+    material_socket.default_value = material
 
     #initialize beamngterrain nodes
     #node Group Input
@@ -84,8 +98,6 @@ def terrain_node_group(displacement_image=None, layermap_image=None, material=No
     image_texture.name = "Image Texture"
     image_texture.extension = 'REPEAT'
     image_texture.interpolation = 'Linear'
-    if displacement_image:
-        image_texture.inputs[0].default_value = displacement_image
     #Frame
     image_texture.inputs[2].default_value = 0
 
@@ -94,8 +106,6 @@ def terrain_node_group(displacement_image=None, layermap_image=None, material=No
     layermap_texture.name = "Layermap Texture"
     layermap_texture.extension = 'REPEAT'
     layermap_texture.interpolation = 'Closest'
-    if layermap_image:
-        layermap_texture.inputs[0].default_value = layermap_image
     #Frame
     layermap_texture.inputs[2].default_value = 0
 
@@ -145,8 +155,6 @@ def terrain_node_group(displacement_image=None, layermap_image=None, material=No
     set_material.name = "Set Material"
     #Selection
     set_material.inputs[1].default_value = True
-    if material:
-        set_material.inputs[2].default_value = material
 
     #node Named Attribute
     named_attribute = group.nodes.new("GeometryNodeInputNamedAttribute")
@@ -319,4 +327,10 @@ def terrain_node_group(displacement_image=None, layermap_image=None, material=No
     group.links.new(grid.outputs[0], store_named_attribute.inputs[0])
     #grid.UV Map -> store_named_attribute.Value
     group.links.new(grid.outputs[1], store_named_attribute.inputs[3])
+    #group_input.Heightmap -> image_texture.Image
+    group.links.new(group_input.outputs[5], image_texture.inputs[0])
+    #group_input.Layermap -> layermap_texture.Image
+    group.links.new(group_input.outputs[6], layermap_texture.inputs[0])
+    #group_input.Material -> set_material.Material
+    group.links.new(group_input.outputs[7], set_material.inputs[2])
     return group

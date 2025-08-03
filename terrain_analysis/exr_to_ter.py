@@ -69,7 +69,7 @@ class EXRToTerExporter:
             # Use fallback values
             self.version = 9
             self.size = 1024
-            self.materials = ["Grass", "dirt_grass", "BeachSand", "rock_desert"]
+            self.materials = ["Grass", "dirt_grass", "BeachSand", "dirt_rocky_large", "dirt_loose", "dirt_dusty", "groundmodel_asphalt1", "Concrete", "Grass2", "Mud", "Rock"]
             self.heightmap_item_size = 2
             self.layermap_item_size = 1
             print("⚠️  Using fallback terrain parameters")
