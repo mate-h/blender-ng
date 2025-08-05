@@ -192,6 +192,7 @@ export function getScaleOptions(): Array<{ value: number; label: string; sizeMet
     { value: 4, label: '4x (4096m)', sizeMeters: 4096 },
     { value: 5, label: '5x (5120m)', sizeMeters: 5120 },
     { value: 8, label: '8x (8192m)', sizeMeters: 8192 },
+    { value: 9.765625, label: '10km (exactly)', sizeMeters: 10000 },
     { value: 10, label: '10x (10240m)', sizeMeters: 10240 }
   ];
 }

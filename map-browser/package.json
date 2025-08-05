@@ -18,5 +18,11 @@
     "svelte-check": "^4.2.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
+  },
+  "dependencies": {
+    "@types/node-fetch": "^2.6.13",
+    "@types/sharp": "^0.32.0",
+    "node-fetch": "^3.3.2",
+    "sharp": "^0.34.3"
   }
 }

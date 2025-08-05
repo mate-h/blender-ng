@@ -11,7 +11,7 @@
     accessToken={MAPBOX_TOKEN}
     style="mapbox://styles/mapbox/satellite-streets-v12"
     center={[defaultCenter.lng, defaultCenter.lat]}
-    zoom={13}
+    zoom={12}
   />
 </main>
 

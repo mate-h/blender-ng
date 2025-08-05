@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getScaleOptions } from './gridUtils';
-  import { gridCenter, gridScale, gridSize } from './stores';
+  import { gridCenter, gridScale, gridSize, availableLayers, layerVisibility, projectLabelsVisible, elevationQueryMode, elevationMarkers, terrainMode } from './stores';
   import { calculateSquareBounds } from './coordinateUtils';
   
   const scaleOptions = getScaleOptions();
@@ -23,11 +23,41 @@
     { value: 'CA_HDREM', label: 'Canada HDREM', description: 'High-resolution DEM for Canada' }
   ];
 
+  const satelliteResolutionOptions = [
+    { value: 2, label: '2 pixels/meter', description: 'Maximum resolution - uses tiling for large areas' },
+    { value: 1, label: '1 pixel/meter', description: 'High resolution - uses tiling for large areas' },
+    { value: 0.5, label: '0.5 pixel/meter', description: 'Medium resolution - good balance' },
+    { value: 0.25, label: '0.25 pixel/meter', description: 'Standard resolution - faster download' },
+    { value: 0.1, label: '0.1 pixel/meter', description: 'Low resolution - very fast download' }
+  ];
+
   // Download state
   let isDownloading = false;
   let downloadStatus = '';
   let downloadError = '';
   let selectedResolution = 'SRTMGL1'; // Default to SRTM 30m
+  
+  // Satellite download state
+  let isSatelliteDownloading = false;
+  let satelliteDownloadStatus = '';
+  let satelliteDownloadError = '';
+  let selectedSatelliteResolution = 1; // Default to 1 pixel per meter
+  
+  // Mapbox token from the app (we'll need to pass this from the parent)
+  export let mapboxToken: string;
+
+  // Layer management
+  function toggleLayerVisibility(layerId: string) {
+    layerVisibility.update(visibility => ({
+      ...visibility,
+      [layerId]: !visibility[layerId]
+    }));
+  }
+
+  // Elevation marker management
+  function clearElevationMarkers() {
+    elevationMarkers.set([]);
+  }
 
   // Format coordinates for display
   function formatCoordinate(value: number, decimals: number = 4): string {
@@ -137,6 +167,85 @@
       isDownloading = false;
     }
   }
+
+  // Download satellite imagery
+  async function downloadSatellite() {
+    if (isSatelliteDownloading) return;
+    
+    isSatelliteDownloading = true;
+    satelliteDownloadStatus = 'Preparing satellite download...';
+    satelliteDownloadError = '';
+    
+    try {
+      const bounds = calculateBounds();
+      
+      satelliteDownloadStatus = 'Requesting satellite imagery...';
+      
+      const response = await fetch('/api/download-satellite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bounds,
+          center: {
+            lat: $gridCenter.lat,
+            lng: $gridCenter.lng
+          },
+          scale: $gridScale,
+          gridSize: $gridSize,
+          resolution: selectedSatelliteResolution,
+          mapboxToken
+        })
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          const errorResult = await response.json();
+          if (errorResult.error) {
+            errorMessage = errorResult.error;
+          }
+        } catch (e) {
+          errorMessage = `${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        satelliteDownloadStatus = `Downloaded: ${result.filename} (${result.fileSize}) - ${result.resolution}`;
+        setTimeout(() => {
+          satelliteDownloadStatus = '';
+        }, 5000);
+      } else {
+        throw new Error(result.error || 'Satellite download failed');
+      }
+      
+    } catch (error) {
+      console.error('Satellite download error:', error);
+      
+      let errorMessage = 'Satellite download failed';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error: Unable to connect to server';
+        } else if (error.message.includes('HTTP') || error.message.includes('Mapbox')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      satelliteDownloadError = `Error: ${errorMessage}`;
+      setTimeout(() => {
+        satelliteDownloadError = '';
+      }, 15000);
+    } finally {
+      isSatelliteDownloading = false;
+    }
+  }
 </script>
 
 <div class="grid-controls">
@@ -173,6 +282,69 @@
     </span>
   </div>
   
+  <div class="layers-section">
+    <div class="layers-title">Map Layers:</div>
+    {#each availableLayers as layer}
+      <div class="layer-control">
+        <label class="layer-checkbox">
+          <input 
+            type="checkbox" 
+            checked={$layerVisibility[layer.id]} 
+            on:change={() => toggleLayerVisibility(layer.id)}
+          />
+          <span class="layer-name">{layer.name}</span>
+          <span 
+            class="layer-color-indicator" 
+            style="background-color: {layer.fillColor};"
+          ></span>
+        </label>
+      </div>
+    {/each}
+    
+    <div class="labels-control">
+      <label class="layer-checkbox">
+        <input 
+          type="checkbox" 
+          bind:checked={$projectLabelsVisible}
+        />
+        <span class="layer-name">Project Labels</span>
+        <span class="labels-icon">🏷️</span>
+      </label>
+    </div>
+  </div>
+  
+  <div class="elevation-section">
+    <div class="elevation-title">Elevation Tools:</div>
+    <div class="elevation-controls">
+      <label class="layer-checkbox">
+        <input 
+          type="checkbox" 
+          bind:checked={$elevationQueryMode}
+        />
+        <span class="layer-name">Click for Elevation</span>
+        <span class="elevation-icon">📏</span>
+      </label>
+      
+      <label class="layer-checkbox">
+        <input 
+          type="checkbox" 
+          bind:checked={$terrainMode}
+        />
+        <span class="layer-name">3D Terrain View</span>
+        <span class="elevation-icon">🏔️</span>
+      </label>
+      
+      {#if $elevationMarkers.length > 0}
+        <button 
+          class="clear-markers-btn"
+          on:click={clearElevationMarkers}
+        >
+          Clear Markers ({$elevationMarkers.length})
+        </button>
+      {/if}
+    </div>
+  </div>
+  
   <div class="location-info">
     <div class="location-title">Current Location:</div>
     <div class="coordinate-group">
@@ -199,6 +371,7 @@
   </div>
 
   <div class="download-section">
+    <div class="download-title">Download Terrain Data:</div>
     <button 
       class="download-btn" 
       class:downloading={isDownloading}
@@ -219,6 +392,47 @@
     
     {#if downloadError}
       <div class="download-status error">{downloadError}</div>
+    {/if}
+  </div>
+
+  <div class="satellite-section">
+    <div class="satellite-title">Download Satellite Imagery:</div>
+    
+    <div class="control-group">
+      <label for="satellite-resolution-select">Resolution:</label>
+      <select id="satellite-resolution-select" bind:value={selectedSatelliteResolution}>
+        {#each satelliteResolutionOptions as option}
+          <option value={option.value} title={option.description}>{option.label}</option>
+        {/each}
+      </select>
+    </div>
+    
+    <div class="resolution-info">
+      <span class="resolution-description">
+        {satelliteResolutionOptions.find(r => r.value === selectedSatelliteResolution)?.description || ''}
+      </span>
+    </div>
+    
+    <button 
+      class="download-btn satellite-btn" 
+      class:downloading={isSatelliteDownloading}
+      disabled={isSatelliteDownloading}
+      on:click={downloadSatellite}
+    >
+      {#if isSatelliteDownloading}
+        <span class="spinner"></span>
+        Downloading...
+      {:else}
+        🛰️ Download Satellite Image
+      {/if}
+    </button>
+    
+    {#if satelliteDownloadStatus}
+      <div class="download-status success">{satelliteDownloadStatus}</div>
+    {/if}
+    
+    {#if satelliteDownloadError}
+      <div class="download-status error">{satelliteDownloadError}</div>
     {/if}
   </div>
 </div>
@@ -414,5 +628,141 @@
     font-size: 11px;
     color: #666;
     font-style: italic;
+  }
+
+  .layers-section {
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    padding: 12px 0;
+    margin: 12px 0;
+  }
+
+  .layers-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .layer-control {
+    margin-bottom: 6px;
+  }
+
+  .layer-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #333;
+    width: 100%;
+  }
+
+  .layer-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: #007bff;
+  }
+
+  .layer-name {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .layer-color-indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+  }
+
+  .layer-checkbox:hover .layer-name {
+    color: #007bff;
+  }
+
+  .labels-control {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #eee;
+  }
+
+  .labels-icon {
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  .elevation-section {
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    padding: 12px 0;
+    margin: 12px 0;
+  }
+
+  .elevation-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .elevation-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .elevation-icon {
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  .clear-markers-btn {
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .clear-markers-btn:hover {
+    background: linear-gradient(135deg, #c82333, #a71e2a);
+    transform: translateY(-1px);
+  }
+
+  .clear-markers-btn:active {
+    transform: translateY(0);
+  }
+
+  .satellite-section {
+    border-top: 1px solid #eee;
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+
+  .satellite-title, .download-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 12px;
+  }
+
+  .satellite-btn {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+  }
+
+  .satellite-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0056b3, #004085);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  }
+
+  .satellite-btn.downloading {
+    background: linear-gradient(135deg, #6c757d, #495057);
   }
 </style>
