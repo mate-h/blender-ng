@@ -49,7 +49,7 @@ export const availableLayers: LayerConfig[] = [
     id: 'projects-footprints',
     name: 'Projects Footprints',
     url: '/downloads/Projects_Footprints/Projects_Footprints.geojson',
-    visible: true,
+    visible: false,
     fillColor: '#00ff00',
     lineColor: '#00aa00',
     fillOpacity: 0.2,
@@ -60,7 +60,7 @@ export const availableLayers: LayerConfig[] = [
     id: 'bc-vancouver-island-utm9',
     name: 'BC Vancouver Island UTM9 (2018)',
     url: '/downloads/INDEX_utm9_BC_Vancouver_Island_Sunshine_Coast_2018/INDEX_utm9_BC_Vancouver_Island_Sunshine_Coast_2018_reprojected.geojson',
-    visible: true,
+    visible: false,
     fillColor: '#ff6600',
     lineColor: '#cc4400',
     fillOpacity: 0.15,
@@ -71,7 +71,7 @@ export const availableLayers: LayerConfig[] = [
     id: 'bc-vancouver-island-utm10',
     name: 'BC Vancouver Island UTM10 (2018)',
     url: '/downloads/INDEX_utm10_BC_Vancouver_Island_Sunshine_Coast_2018/INDEX_utm10_BC_Vancouver_Island_Sunshine_Coast_2018_reprojected.geojson',
-    visible: true,
+    visible: false,
     fillColor: '#0066ff',
     lineColor: '#004499',
     fillOpacity: 0.15,
@@ -82,12 +82,34 @@ export const availableLayers: LayerConfig[] = [
     id: 'bc-lower-mainland-2016',
     name: 'BC Lower Mainland (2016)',
     url: '/downloads/INDEX_utm10_BC_Lower_Mainland_2016/INDEX_utm10_BC_Lower_Mainland_2016.geojson',
-    visible: true,
+    visible: false,
     fillColor: '#9966ff',
     lineColor: '#7744cc',
     fillOpacity: 0.15,
     lineWidth: 1.5,
     lineOpacity: 0.7
+  },
+  {
+    id: 'roadways',
+    name: 'Roadways',
+    url: '/downloads/ways.geojson',
+    visible: false,
+    fillColor: '#ff4444',
+    lineColor: '#cc0000',
+    fillOpacity: 0.8,
+    lineWidth: 2,
+    lineOpacity: 0.9
+  },
+  {
+    id: 'street-outlines',
+    name: 'Street Outlines',
+    url: '', // Handled internally by StreetOutlinesLayer component
+    visible: true,
+    fillColor: '#333333',
+    lineColor: '#333333',
+    fillOpacity: 0.7,
+    lineWidth: 2,
+    lineOpacity: 0.8
   }
 ];
 

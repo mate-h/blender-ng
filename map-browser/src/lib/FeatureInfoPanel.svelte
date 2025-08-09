@@ -30,13 +30,13 @@
     }
     
     // Ensure minimum margins
-    left = Math.max(10, left);
-    top = Math.max(10, top);
+    left = Math.max(16, left);
+    top = Math.max(16, top);
     
     return { left, top };
   }
 
-  $: position = getOptimalPosition();
+  $: position = { left: 16, top: 16 };
 
   function formatDownloadLinks(properties: any) {
     const links = [];

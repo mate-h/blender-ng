@@ -3,6 +3,8 @@
   import mapboxgl from 'mapbox-gl';
   import 'mapbox-gl/dist/mapbox-gl.css';
   import { defaultCenter } from './stores';
+  import RoadwaysLayer from './roadways/RoadwaysLayer.svelte';
+  import StreetOutlinesLayer from './roadways/StreetOutlinesLayer.svelte';
   
   import { generateGrid, generateHandles, type GridConfig, type GridData } from './gridUtils';
   import GridControls from './GridControls.svelte';
@@ -16,6 +18,13 @@
 
   let mapContainer: HTMLDivElement;
   let map: mapboxgl.Map;
+  let roadwaysLayer: RoadwaysLayer;
+  let streetOutlinesLayer: StreetOutlinesLayer;
+  
+  // Expose roadwaysLayer globally for debugging
+  $: if (roadwaysLayer && typeof window !== 'undefined') {
+    (window as any).roadwaysLayer = roadwaysLayer;
+  }
   
   // Grid state
   let gridData: GridData;
@@ -129,6 +138,12 @@
 
   async function loadLayer(layerConfig: LayerConfig) {
     try {
+      // Skip layers with empty URLs (handled by custom components)
+      if (!layerConfig.url || layerConfig.url.trim() === '') {
+        console.log(`Skipping layer '${layerConfig.name}' - no URL provided (handled by custom component)`);
+        return;
+      }
+      
       const response = await fetch(layerConfig.url);
       const geojsonData = await response.json();
       
@@ -140,10 +155,20 @@
         'data': geojsonData
       });
       
-      // Check if this is a point layer (trees) or polygon layer
+      // Check layer type based on geometry
       const isPointLayer = layerConfig.id === 'public-trees';
+      const isLineLayer = layerConfig.id === 'roadways';
+      const isStreetOutlines = layerConfig.id === 'street-outlines';
       
-      if (isPointLayer) {
+      if (isLineLayer) {
+        // Skip roadways here - handled by advanced RoadwaysLayer component
+        console.log(`Skipping roadways layer - handled by advanced component`);
+        return;
+      } else if (isStreetOutlines) {
+        // Skip street outlines here - handled by StreetOutlinesLayer component
+        console.log(`Skipping street outlines layer - handled by advanced component`);
+        return;
+      } else if (isPointLayer) {
         // For point layers (trees), use circle layers
         const circleLayerId = `${layerConfig.id}-circle`;
         const selectedCircleLayerId = `${layerConfig.id}-selected`;
@@ -249,6 +274,8 @@
     availableLayers.forEach(layerConfig => {
       const isVisible = visibility[layerConfig.id];
       const isPointLayer = layerConfig.id === 'public-trees';
+      const isLineLayer = layerConfig.id === 'roadways';
+      const isStreetOutlines = layerConfig.id === 'street-outlines';
       
       if (isPointLayer) {
         // Handle point layers (trees)
@@ -256,6 +283,12 @@
         if (map.getLayer(circleLayerId)) {
           map.setLayoutProperty(circleLayerId, 'visibility', isVisible ? 'visible' : 'none');
         }
+      } else if (isLineLayer) {
+        // Skip roadways visibility handling - managed by RoadwaysLayer component
+        return;
+      } else if (isStreetOutlines) {
+        // Skip street outlines visibility handling - managed by StreetOutlinesLayer component
+        return;
       } else {
         // Handle polygon layers
         const fillLayerId = `${layerConfig.id}-fill`;
@@ -552,7 +585,8 @@
         return (layerId.includes('projects-footprints') || 
                 layerId.includes('bc-vancouver-island') ||
                 layerId.includes('bc-lower-mainland') ||
-                layerId.includes('public-trees')) &&
+                layerId.includes('public-trees') ||
+                layerId.includes('roadways')) &&
                !layerId.includes('-labels'); // Exclude label layers
       });
       
@@ -902,6 +936,11 @@
 </script>
 
 <div bind:this={mapContainer} class="map-container"></div>
+
+{#if map}
+  <RoadwaysLayer bind:this={roadwaysLayer} {map} />
+  <StreetOutlinesLayer bind:this={streetOutlinesLayer} {map} />
+{/if}
 
 <GridControls mapboxToken={accessToken} />
 

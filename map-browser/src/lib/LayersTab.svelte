@@ -1,5 +1,6 @@
 <script lang="ts">
   import { availableLayers, layerVisibility, projectLabelsVisible } from './stores';
+  import RoadwaysControls from './roadways/RoadwaysControls.svelte';
 
   // Layer management
   function toggleLayerVisibility(layerId: string) {
@@ -40,6 +41,11 @@
         <span class="labels-icon">🏷️</span>
       </label>
     </div>
+  </div>
+
+  <!-- Advanced Roadways Controls -->
+  <div class="roadways-section">
+    <RoadwaysControls />
   </div>
 </div>
 
@@ -109,5 +115,11 @@
   .labels-icon {
     font-size: 14px;
     opacity: 0.8;
+  }
+
+  .roadways-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #ddd;
   }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import MapboxMap from './lib/MapboxMap.svelte'
+  import RoadwaysLegend from './lib/roadways/RoadwaysLegend.svelte'
   import { defaultCenter } from './lib/stores'
   
   const MAPBOX_TOKEN = "pk.eyJ1IjoibWF0ZWgiLCJhIjoiY2pmOTEzbHo2MzU3cTJ3b201NDNkOXQxZiJ9.UYLkoWDRs877jt_-k4LH4g"
@@ -13,6 +14,8 @@
     center={[defaultCenter.lng, defaultCenter.lat]}
     zoom={12}
   />
+  
+  <RoadwaysLegend />
 </main>
 
 <style>
