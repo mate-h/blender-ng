@@ -8,6 +8,8 @@ https://app.geo.ca/en-ca/map-browser/record/957782bf-847c-4644-a757-e383c0057995
 
 https://opentopography.org/
 
+https://opendata.vancouver.ca/explore/dataset/public-trees
+
 ## Coordinate System Reprojection
 
 Many GIS datasets come in UTM (Universal Transverse Mercator) coordinate systems, which use meter-based coordinates that are not compatible with web mapping libraries like Mapbox. This project includes several layers that required coordinate system transformation.

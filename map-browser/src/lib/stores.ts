@@ -2,9 +2,9 @@ import { writable } from 'svelte/store';
 import type { LatLng } from './coordinateUtils';
 
 export const defaultCenter: LatLng = {
-  // 49.3375, -123.2065
-  lng: -123.2065,
-  lat: 49.3375
+  // 49.337545, -123.206493
+  lng: -123.206493,
+  lat: 49.337545
 };
 
 // Store for current grid center location
@@ -34,6 +34,17 @@ export interface LayerConfig {
 
 // Available layers
 export const availableLayers: LayerConfig[] = [
+  {
+    id: 'public-trees',
+    name: 'Public Trees',
+    url: '/downloads/public-trees.geojson',
+    visible: false,
+    fillColor: '#228B22',
+    lineColor: '#006400',
+    fillOpacity: 0.7,
+    lineWidth: 1,
+    lineOpacity: 1.0
+  },
   {
     id: 'projects-footprints',
     name: 'Projects Footprints',
@@ -108,3 +119,13 @@ export const elevationQueryMode = writable<boolean>(false);
 
 // 3D terrain visualization mode
 export const terrainMode = writable<boolean>(false);
+
+// Selected tree interface
+export interface SelectedTree {
+  id: string;
+  properties: any;
+  coordinates: [number, number];
+}
+
+// Selected trees store
+export const selectedTrees = writable<SelectedTree[]>([]);

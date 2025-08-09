@@ -149,4 +149,6 @@ test/exports
 test/small_island
 
 beamng_map_mod/levels
+beamng_map_mod/levels-org
+beamng_map_mod/levels-data
 beamng_map_mod/temp_bc_coast

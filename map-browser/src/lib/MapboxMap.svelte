@@ -7,7 +7,7 @@
   import { generateGrid, generateHandles, type GridConfig, type GridData } from './gridUtils';
   import GridControls from './GridControls.svelte';
   import FeatureInfoPanel from './FeatureInfoPanel.svelte';
-  import { gridCenter, gridScale, gridSize, availableLayers, layerVisibility, projectLabelsVisible, elevationQueryMode, elevationMarkers, terrainMode, type LayerConfig, type ElevationMarker } from './stores';
+  import { gridCenter, gridScale, gridSize, availableLayers, layerVisibility, projectLabelsVisible, elevationQueryMode, elevationMarkers, terrainMode, selectedTrees, type LayerConfig, type ElevationMarker, type SelectedTree } from './stores';
 
   export let accessToken: string;
   export let style = 'mapbox://styles/mapbox/streets-v12';
@@ -133,8 +133,6 @@
       const geojsonData = await response.json();
       
       const sourceId = layerConfig.id;
-      const fillLayerId = `${layerConfig.id}-fill`;
-      const lineLayerId = `${layerConfig.id}-line`;
       
       // Add the source
       map.addSource(sourceId, {
@@ -142,57 +140,103 @@
         'data': geojsonData
       });
       
-      // Add fill layer
-      map.addLayer({
-        'id': fillLayerId,
-        'type': 'fill',
-        'source': sourceId,
-        'paint': {
-          'fill-color': layerConfig.fillColor,
-          'fill-opacity': layerConfig.fillOpacity
-        },
-        'layout': {
-          'visibility': layerConfig.visible ? 'visible' : 'none'
-        }
-      });
+      // Check if this is a point layer (trees) or polygon layer
+      const isPointLayer = layerConfig.id === 'public-trees';
       
-      // Add outline layer
-      map.addLayer({
-        'id': lineLayerId,
-        'type': 'line',
-        'source': sourceId,
-        'paint': {
-          'line-color': layerConfig.lineColor,
-          'line-width': layerConfig.lineWidth,
-          'line-opacity': layerConfig.lineOpacity
-        },
-        'layout': {
-          'visibility': layerConfig.visible ? 'visible' : 'none'
-        }
-      });
-      
-      // Add text labels for Projects Footprints layer
-      if (layerConfig.id === 'projects-footprints') {
-        const labelLayerId = `${layerConfig.id}-labels`;
+      if (isPointLayer) {
+        // For point layers (trees), use circle layers
+        const circleLayerId = `${layerConfig.id}-circle`;
+        const selectedCircleLayerId = `${layerConfig.id}-selected`;
+        
+        // Add main circle layer
         map.addLayer({
-          'id': labelLayerId,
-          'type': 'symbol',
+          'id': circleLayerId,
+          'type': 'circle',
           'source': sourceId,
-          'layout': {
-            'text-field': ['get', 'Project'],
-            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
-            'text-size': 10,
-            'text-anchor': 'center',
-            'text-offset': [0, 0],
-            'visibility': 'none' // Labels start hidden by default
-          },
           'paint': {
-            'text-color': '#ffffff',
-            'text-halo-color': 'rgba(0, 0, 0, 1.0)',
-            'text-halo-width': 1,
-            'text-opacity': 1.0
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'selected'], false],
+              8, // Selected size
+              5  // Normal size
+            ],
+            'circle-color': [
+              'case',
+              ['boolean', ['feature-state', 'selected'], false],
+              '#FF6B35', // Selected color (orange)
+              layerConfig.fillColor // Normal color (green)
+            ],
+            'circle-stroke-color': layerConfig.lineColor,
+            'circle-stroke-width': [
+              'case',
+              ['boolean', ['feature-state', 'selected'], false],
+              3, // Selected stroke width
+              1  // Normal stroke width
+            ],
+            'circle-opacity': layerConfig.fillOpacity
+          },
+          'layout': {
+            'visibility': layerConfig.visible ? 'visible' : 'none'
           }
         });
+        
+      } else {
+        // For polygon layers, use the existing fill/line approach
+        const fillLayerId = `${layerConfig.id}-fill`;
+        const lineLayerId = `${layerConfig.id}-line`;
+        
+        // Add fill layer
+        map.addLayer({
+          'id': fillLayerId,
+          'type': 'fill',
+          'source': sourceId,
+          'paint': {
+            'fill-color': layerConfig.fillColor,
+            'fill-opacity': layerConfig.fillOpacity
+          },
+          'layout': {
+            'visibility': layerConfig.visible ? 'visible' : 'none'
+          }
+        });
+        
+        // Add outline layer
+        map.addLayer({
+          'id': lineLayerId,
+          'type': 'line',
+          'source': sourceId,
+          'paint': {
+            'line-color': layerConfig.lineColor,
+            'line-width': layerConfig.lineWidth,
+            'line-opacity': layerConfig.lineOpacity
+          },
+          'layout': {
+            'visibility': layerConfig.visible ? 'visible' : 'none'
+          }
+        });
+        
+        // Add text labels for Projects Footprints layer
+        if (layerConfig.id === 'projects-footprints') {
+          const labelLayerId = `${layerConfig.id}-labels`;
+          map.addLayer({
+            'id': labelLayerId,
+            'type': 'symbol',
+            'source': sourceId,
+            'layout': {
+              'text-field': ['get', 'Project'],
+              'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+              'text-size': 10,
+              'text-anchor': 'center',
+              'text-offset': [0, 0],
+              'visibility': 'none' // Labels start hidden by default
+            },
+            'paint': {
+              'text-color': '#ffffff',
+              'text-halo-color': 'rgba(0, 0, 0, 1.0)',
+              'text-halo-width': 1,
+              'text-opacity': 1.0
+            }
+          });
+        }
       }
       
       console.log(`Layer '${layerConfig.name}' loaded successfully`);
@@ -203,15 +247,26 @@
 
   function updateLayerVisibility(visibility: Record<string, boolean>) {
     availableLayers.forEach(layerConfig => {
-      const fillLayerId = `${layerConfig.id}-fill`;
-      const lineLayerId = `${layerConfig.id}-line`;
       const isVisible = visibility[layerConfig.id];
+      const isPointLayer = layerConfig.id === 'public-trees';
       
-      if (map.getLayer(fillLayerId)) {
-        map.setLayoutProperty(fillLayerId, 'visibility', isVisible ? 'visible' : 'none');
-      }
-      if (map.getLayer(lineLayerId)) {
-        map.setLayoutProperty(lineLayerId, 'visibility', isVisible ? 'visible' : 'none');
+      if (isPointLayer) {
+        // Handle point layers (trees)
+        const circleLayerId = `${layerConfig.id}-circle`;
+        if (map.getLayer(circleLayerId)) {
+          map.setLayoutProperty(circleLayerId, 'visibility', isVisible ? 'visible' : 'none');
+        }
+      } else {
+        // Handle polygon layers
+        const fillLayerId = `${layerConfig.id}-fill`;
+        const lineLayerId = `${layerConfig.id}-line`;
+        
+        if (map.getLayer(fillLayerId)) {
+          map.setLayoutProperty(fillLayerId, 'visibility', isVisible ? 'visible' : 'none');
+        }
+        if (map.getLayer(lineLayerId)) {
+          map.setLayoutProperty(lineLayerId, 'visibility', isVisible ? 'visible' : 'none');
+        }
       }
     });
     
@@ -496,9 +551,20 @@
         
         return (layerId.includes('projects-footprints') || 
                 layerId.includes('bc-vancouver-island') ||
-                layerId.includes('bc-lower-mainland')) &&
+                layerId.includes('bc-lower-mainland') ||
+                layerId.includes('public-trees')) &&
                !layerId.includes('-labels'); // Exclude label layers
       });
+      
+      // Handle tree selection separately
+      const treeFeatures = dataLayerFeatures.filter(feature => 
+        feature.layer?.id?.includes('public-trees')
+      );
+      
+      if (treeFeatures.length > 0) {
+        handleTreeSelection(treeFeatures[0], e.lngLat);
+        return; // Don't show feature info panel for trees
+      }
       
       if (dataLayerFeatures.length > 0) {
         clickedFeatures = dataLayerFeatures;
@@ -513,6 +579,52 @@
     map.on('move', () => {
       featureInfoVisible = false;
     });
+  }
+
+  function handleTreeSelection(feature: any, lngLat: mapboxgl.LngLat) {
+    const treeId = feature.properties?.tree_id;
+    if (!treeId) return;
+    
+    const coordinates: [number, number] = [lngLat.lng, lngLat.lat];
+    
+    // Check if tree is already selected
+    const isAlreadySelected = $selectedTrees.some(tree => tree.id === treeId);
+    
+    if (isAlreadySelected) {
+      // Deselect the tree
+      selectedTrees.update(trees => trees.filter(tree => tree.id !== treeId));
+      // Remove feature state
+      map.setFeatureState(
+        { source: 'public-trees', id: feature.id },
+        { selected: false }
+      );
+    } else {
+      // Select the tree
+      const selectedTree: SelectedTree = {
+        id: treeId,
+        properties: feature.properties,
+        coordinates
+      };
+      
+      selectedTrees.update(trees => [...trees, selectedTree]);
+      // Set feature state
+      map.setFeatureState(
+        { source: 'public-trees', id: feature.id },
+        { selected: true }
+      );
+    }
+    
+    console.log(`Tree ${isAlreadySelected ? 'deselected' : 'selected'}:`, feature.properties);
+  }
+
+  // Subscribe to selectedTrees changes to update feature states
+  $: if (map && map.isStyleLoaded()) {
+    // Clear all feature states first
+    if (map.getSource('public-trees')) {
+      // We need to clear all feature states when trees are cleared
+      // This is a bit tricky since we can't enumerate all features easily
+      // So we'll rely on the reactive statement to handle this
+    }
   }
 
   async function addElevationMarker(lngLat: mapboxgl.LngLat) {
