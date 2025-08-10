@@ -2,8 +2,16 @@
   export let features: any[] = [];
   export let clickPosition: { x: number; y: number } | null = null;
   export let isVisible: boolean = false;
+  export let mapboxToken: string = '';
 
   let panelElement: HTMLDivElement;
+  
+  // Satellite download state
+  let satelliteDownloadStates: Record<string, {
+    isDownloading: boolean;
+    status: string;
+    error: string;
+  }> = {};
 
   function closePanel() {
     isVisible = false;
@@ -101,13 +109,112 @@
 
   function getLayerColor(layerId: string) {
     // Match colors from stores.ts
-    const layerColors = {
+    const layerColors: Record<string, string> = {
       'projects-footprints': '#00ff00',
       'bc-vancouver-island-utm9': '#ff6600', 
       'bc-vancouver-island-utm10': '#0066ff',
       'bc-lower-mainland-2016': '#9966ff'
     };
     return layerColors[layerId] || '#666666';
+  }
+
+  // Download satellite imagery to match DTM
+  async function downloadMatchingSatellite(dtmUrl: string, featureId: string) {
+    if (!mapboxToken) {
+      alert('Mapbox token is required for satellite imagery download');
+      return;
+    }
+
+    const stateKey = `${featureId}-${dtmUrl}`;
+    satelliteDownloadStates[stateKey] = {
+      isDownloading: true,
+      status: 'Preparing satellite download to match DTM...',
+      error: ''
+    };
+    
+    try {
+      const response = await fetch('/api/download-satellite-dtm-matched', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dtmFilePath: dtmUrl,
+          mapboxToken: mapboxToken,
+          targetResolution: 1 // 1 pixel per meter default
+        })
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          const errorResult = await response.json();
+          if (errorResult.error) {
+            errorMessage = errorResult.error;
+          }
+        } catch (e) {
+          errorMessage = `${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        let statusMessage = `✅ Complete processing finished!\n`;
+        statusMessage += `🎮 BeamNG ready: ${result.filename} (${result.fileSize})\n`;
+        if (result.additionalFiles) {
+          statusMessage += `📦 Additional files generated:\n`;
+          statusMessage += `   • ${result.additionalFiles.aligned} (10K TIFF)\n`;
+          statusMessage += `   • ${result.additionalFiles.alignedJpeg} (10K JPEG)\n`;
+          statusMessage += `   • ${result.additionalFiles.crop8k} (8K JPEG)\n`;
+        }
+        
+        satelliteDownloadStates[stateKey] = {
+          isDownloading: false,
+          status: statusMessage,
+          error: ''
+        };
+        setTimeout(() => {
+          if (satelliteDownloadStates[stateKey]) {
+            satelliteDownloadStates[stateKey].status = '';
+          }
+        }, 12000); // Show longer for more detailed info
+      } else {
+        throw new Error(result.error || 'DTM-matched satellite download failed');
+      }
+      
+    } catch (error) {
+      console.error('DTM-matched satellite download error:', error);
+      
+      let errorMessage = 'DTM-matched satellite download failed';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error: Unable to connect to server';
+        } else if (error.message.includes('HTTP') || error.message.includes('Mapbox')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      satelliteDownloadStates[stateKey] = {
+        isDownloading: false,
+        status: '',
+        error: `Error: ${errorMessage}`
+      };
+      setTimeout(() => {
+        if (satelliteDownloadStates[stateKey]) {
+          satelliteDownloadStates[stateKey].error = '';
+        }
+      }, 15000);
+    }
+  }
+
+  // Check if a URL is a DTM file
+  function isDTMFile(url: string): boolean {
+    return url.includes('dtm') && !url.includes('dtmHS') && !url.includes('dtmAsp') && !url.includes('dtmSlo');
   }
 </script>
 
@@ -177,6 +284,36 @@
                       <span class="download-icon">⬇</span>
                     </a>
                     <span class="download-description">{link.description}</span>
+                    
+                    <!-- Add satellite download button for DTM files -->
+                    {#if isDTMFile(link.url) && mapboxToken}
+                      {@const stateKey = `${feature.properties.Tile_name || index}-${link.url}`}
+                      {@const downloadState = satelliteDownloadStates[stateKey] || { isDownloading: false, status: '', error: '' }}
+                      
+                      <div class="satellite-download-section">
+                        <button 
+                          class="satellite-download-btn" 
+                          class:downloading={downloadState.isDownloading}
+                          disabled={downloadState.isDownloading}
+                          on:click={() => downloadMatchingSatellite(link.url, feature.properties.Tile_name || String(index))}
+                        >
+                          {#if downloadState.isDownloading}
+                            <span class="spinner"></span>
+                            Downloading Satellite...
+                          {:else}
+                            🛰️ Download Matching Satellite
+                          {/if}
+                        </button>
+                        
+                        {#if downloadState.status}
+                          <div class="satellite-status success">{downloadState.status}</div>
+                        {/if}
+                        
+                        {#if downloadState.error}
+                          <div class="satellite-status error">{downloadState.error}</div>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
                 {/each}
               </div>
@@ -396,5 +533,91 @@
     height: 1px;
     background: #eee;
     margin: 16px 0;
+  }
+
+  /* Satellite download styles */
+  .satellite-download-section {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f0f0f0;
+  }
+
+  .satellite-download-btn {
+    width: 100%;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+
+  .satellite-download-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0056b3, #004085);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+  }
+
+  .satellite-download-btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .satellite-download-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .satellite-download-btn.downloading {
+    background: linear-gradient(135deg, #6c757d, #495057);
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .satellite-status {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+    white-space: pre-line; /* Preserve line breaks from \n */
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .satellite-status.success {
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
+    border: 1px solid rgba(40, 167, 69, 0.2);
+  }
+
+  .satellite-status.error {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.2);
+    max-height: 40px;
+    overflow-y: auto;
   }
 </style>

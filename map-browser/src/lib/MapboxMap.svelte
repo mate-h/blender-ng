@@ -948,6 +948,7 @@
   bind:isVisible={featureInfoVisible}
   features={clickedFeatures}
   clickPosition={clickPosition}
+  mapboxToken={accessToken}
 />
 
 <style>
